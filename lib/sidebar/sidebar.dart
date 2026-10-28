@@ -495,6 +495,11 @@ class _SidebarState extends State<Sidebar>
 
   AgentThread? get _current => widget.current ?? _workspace.current;
 
+  /// Listed under companies and projects: by project, or the active ones.
+  bool get _byProject =>
+      _grouping == SidebarGrouping.project ||
+      _grouping == SidebarGrouping.active;
+
   void _open(AgentThread thread) {
     (widget.onSelect ?? _workspace.select)(thread);
     widget.onOpened?.call();
@@ -729,13 +734,16 @@ class _SidebarState extends State<Sidebar>
           ),
         ],
         // What goes on now: working, waiting, finished unseen, or of today.
-        SidebarGrouping.active => [
-          _Group(
-            'active',
-            l10n.sidebarGroupingActive,
-            where((t) => t.shownStatus != ThreadStatus.idle || daysAgo(t) <= 0),
+        // What goes on now (working, waiting, finished unseen, or of
+        // today), under its company and project as by project.
+        SidebarGrouping.active => _projectGroups(
+          (test) => where(
+            (t) =>
+                test(t) &&
+                (t.shownStatus != ThreadStatus.idle || daysAgo(t) <= 0),
           ),
-        ],
+          onlyActive: true,
+        ),
       },
       if (_showArchived)
         _Group(_archivedGroup, l10n.sidebarArchived, [
@@ -748,8 +756,9 @@ class _SidebarState extends State<Sidebar>
   /// The projects' groups, under their companies' headers when there are
   /// companies (see [Companies]), the archived projects' last.
   List<_Group> _projectGroups(
-    List<AgentThread> Function(bool Function(AgentThread)) where,
-  ) {
+    List<AgentThread> Function(bool Function(AgentThread)) where, {
+    bool onlyActive = false,
+  }) {
     final l10n = context.l10n;
     _Group group(Project project, {bool nested = false}) => _Group(
       Workspace.projectGroup(project.path),
@@ -766,9 +775,16 @@ class _SidebarState extends State<Sidebar>
       project: project,
       nested: nested,
     );
-    final projects = _workspace.sidebarProjectsHere;
+    final listed = where((_) => true);
+    // Active only: the projects with agents [where] lists, no archived ones.
+    final projects = [
+      for (final project in _workspace.sidebarProjectsHere)
+        if (!onlyActive || listed.any((t) => t.project == project)) project,
+    ];
     final companies = Companies.instance;
-    final archived = _workspace.archivedProjects;
+    final archived = onlyActive
+        ? const <Project>[]
+        : _workspace.archivedProjects;
     _Group header(
       String id,
       String label,
@@ -787,6 +803,7 @@ class _SidebarState extends State<Sidebar>
         for (final project in projects)
           if (companies.of(project.path)?.name == company.name) project,
       ];
+      if (onlyActive && mine.isEmpty) return const [];
       return [
         header(company.name, company.name, company.name, mine),
         if (open(company.name))
@@ -809,7 +826,7 @@ class _SidebarState extends State<Sidebar>
           if (open(''))
             for (final project in none) group(project, nested: true),
         ],
-        if (companies.list.any((c) => c.hidden)) ...[
+        if (!onlyActive && companies.list.any((c) => c.hidden)) ...[
           header('#hidden', l10n.companiesHidden, ''),
           if (open('#hidden'))
             for (final company in companies.list)
@@ -1396,9 +1413,7 @@ class _SidebarState extends State<Sidebar>
   /// agent shown is shown here too: its company and project unfolded, its
   /// row scrolled to.
   void _unfoldTo(AgentThread thread) {
-    if (_grouping != SidebarGrouping.project ||
-        thread.archived ||
-        _workspace.isHidden(thread.project)) {
+    if (!_byProject || thread.archived || _workspace.isHidden(thread.project)) {
       return;
     }
     final company = Companies.instance.of(thread.project.path)?.name ?? '';
@@ -1420,7 +1435,7 @@ class _SidebarState extends State<Sidebar>
   /// [child] as in a tree: under a company or a project, set in and with
   /// a line down from each header's chevron it is under.
   Widget _treed(_ListRow row, Widget child) {
-    if (_grouping != SidebarGrouping.project) return child;
+    if (!_byProject) return child;
     final group = row.group;
     // Where the headers' chevrons are, at their left padding.
     const company = 11.5, project = 23.5;
