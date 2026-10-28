@@ -4460,13 +4460,38 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     final terminal = _workspace.inTerminal(thread);
     if (!terminal && !_workspace.canUseTerminal(thread)) return null;
     final l10n = context.l10n;
+    // Named, not an icon alone: the panel's terminal has one like it.
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: SidebarIconButton(
-        icon: terminal ? Codicons.commentDiscussion : Codicons.terminal,
-        tooltip: terminal ? l10n.agentShowChat : l10n.agentShowTerminal,
-        size: 22,
-        onTap: () => unawaited(_switchView(thread, !terminal)),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(
+        message: terminal ? l10n.agentShowChat : l10n.agentShowTerminal,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(4),
+          onTap: () => unawaited(_switchView(thread, !terminal)),
+          child: Container(
+            height: 22,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  terminal ? Codicons.commentDiscussion : Codicons.terminal,
+                  size: 13,
+                  color: AppColors.textMuted,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  terminal ? 'Chat' : 'Terminal',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
