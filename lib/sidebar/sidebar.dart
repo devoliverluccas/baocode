@@ -131,6 +131,7 @@ const _archivedGroup = 'archived';
 
 /// The header of the projects taken off the sidebar.
 const _archivedProjectsGroup = 'company:#archived';
+const _hiddenCompaniesGroup = 'company:#hidden';
 
 /// Where an agent dragged within the list would go: in [group], before or
 /// after an agent there, or on top (neither).
@@ -461,7 +462,8 @@ class _SidebarState extends State<Sidebar>
 
   /// The archived projects' header starts folded: toggled, it opens.
   bool _isCollapsed(String id) =>
-      _workspace.isCollapsed(id) != (id == _archivedProjectsGroup);
+      _workspace.isCollapsed(id) !=
+      (id == _archivedProjectsGroup || id == _hiddenCompaniesGroup);
 
   /// A project's most recent agents, unless asked for all (the open one
   /// too, wherever it is).
@@ -780,6 +782,18 @@ class _SidebarState extends State<Sidebar>
       inside: where((thread) => of.contains(thread.project)),
     );
     bool open(String id) => !_isCollapsed('company:$id');
+    List<_Group> companyGroups(Company company) {
+      final mine = [
+        for (final project in projects)
+          if (companies.of(project.path)?.name == company.name) project,
+      ];
+      return [
+        header(company.name, company.name, company.name, mine),
+        if (open(company.name))
+          for (final project in mine) group(project, nested: true),
+      ];
+    }
+
     final none = [
       for (final project in projects)
         if (companies.of(project.path) == null) project,
@@ -788,20 +802,18 @@ class _SidebarState extends State<Sidebar>
       if (companies.list.isEmpty)
         for (final project in projects) group(project)
       else ...[
-        for (final company in companies.list) ...[
-          header(company.name, company.name, company.name, [
-            for (final project in projects)
-              if (companies.of(project.path)?.name == company.name) project,
-          ]),
-          if (open(company.name))
-            for (final project in projects)
-              if (companies.of(project.path)?.name == company.name)
-                group(project, nested: true),
-        ],
+        for (final company in companies.list)
+          if (!company.hidden) ...companyGroups(company),
         if (none.isNotEmpty) ...[
           header('', l10n.companyNone, '', none),
           if (open(''))
             for (final project in none) group(project, nested: true),
+        ],
+        if (companies.list.any((c) => c.hidden)) ...[
+          header('#hidden', l10n.companiesHidden, ''),
+          if (open('#hidden'))
+            for (final company in companies.list)
+              if (company.hidden) ...companyGroups(company),
         ],
       ],
       if (archived.isNotEmpty) ...[
@@ -830,6 +842,13 @@ class _SidebarState extends State<Sidebar>
         l10n.companyEdit,
         icon: Icons.edit_outlined,
         onSelected: () => unawaited(editCompany(context, editing: company)),
+      ),
+      SidebarMenuItem(
+        company.hidden ? l10n.companyShow : l10n.companyHide,
+        icon: company.hidden
+            ? Icons.visibility_outlined
+            : Icons.visibility_off_outlined,
+        onSelected: () => Companies.instance.setHidden(name, !company.hidden),
       ),
       SidebarMenuItem(
         l10n.companyDelete,
@@ -1398,6 +1417,35 @@ class _SidebarState extends State<Sidebar>
     });
   }
 
+  /// [child] as in a tree: under a company or a project, set in and with
+  /// a line down from each header's chevron it is under.
+  Widget _treed(_ListRow row, Widget child) {
+    if (_grouping != SidebarGrouping.project) return child;
+    final group = row.group;
+    // Where the headers' chevrons are, at their left padding.
+    const company = 11.5, project = 23.5;
+    final (List<double> lines, double indent) = switch (row.kind) {
+      _ListRowKind.header when group.nested => (const [company], 0),
+      _ListRowKind.thread || _ListRowKind.more
+          when group.project != null && group.nested =>
+        (const [company, project], 24),
+      _ListRowKind.thread ||
+      _ListRowKind.more when group.project != null => (const [company], 12),
+      _ => (const [], 0),
+    };
+    if (lines.isEmpty) return child;
+    return CustomPaint(
+      foregroundPainter: _TreeLines(
+        lines,
+        themeColors['tree.indentGuidesStroke'],
+      ),
+      child: Padding(
+        padding: EdgeInsets.only(left: indent),
+        child: child,
+      ),
+    );
+  }
+
   /// Anchors for the list and project icon popovers.
   final Map<Object, BuildContext> _slots = {};
   static const _listSlot = #list;
@@ -1554,7 +1602,7 @@ class _SidebarState extends State<Sidebar>
                 key: row.key,
                 clipBehavior: Clip.none,
                 children: [
-                  Positioned.fill(child: child),
+                  Positioned.fill(child: _treed(row, child)),
                   if (before)
                     const Positioned(
                       top: 0,
@@ -1612,7 +1660,10 @@ class _SidebarState extends State<Sidebar>
       dragged: project != null && identical(project, _draggedProject),
       pinned: project != null && _workspace.isPinnedProject(project),
       icon: project == null
-          ? null
+          ? switch (Companies.instance.byName(group.company ?? '')) {
+              final company? => companyIconOf(company),
+              null => null,
+            }
           : _Slot(
               slot: _iconSlot(project),
               slots: _slots,
@@ -1620,6 +1671,11 @@ class _SidebarState extends State<Sidebar>
                 project: project,
                 workspace: _workspace,
                 onTap: () => _openIconPicker(project),
+                // Its company's color, as its folder's.
+                color: switch (Companies.instance.of(project.path)?.color) {
+                  final color? => Color(color),
+                  null => null,
+                },
               ),
             ),
     );
@@ -3975,7 +4031,11 @@ class _HeaderIcon extends StatelessWidget {
     required this.project,
     required this.workspace,
     required this.onTap,
+    this.color,
   });
+
+  /// Its color, if not the list's.
+  final Color? color;
 
   final Project project;
   final Workspace workspace;
@@ -4006,7 +4066,7 @@ class _HeaderIcon extends StatelessWidget {
                 icon: workspace.iconOf(project),
                 library: workspace.icons,
                 size: 22,
-                color: AppColors.textMuted,
+                color: color ?? AppColors.textMuted,
                 fallback: workspace.workspaceOf(project) != null
                     ? Codicons.folderLibrary
                     : Icons.folder_outlined,
@@ -4110,4 +4170,25 @@ class _HostDot extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A tree's lines down a row, at [xs].
+class _TreeLines extends CustomPainter {
+  const _TreeLines(this.xs, this.color);
+
+  final List<double> xs;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1;
+    for (final x in xs) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TreeLines old) => old.color != color || old.xs != xs;
 }

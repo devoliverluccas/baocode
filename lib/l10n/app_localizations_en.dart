@@ -12387,4 +12387,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get agentShowChat => 'Show as chat';
+
+  @override
+  String get companyColor => 'Color';
+
+  @override
+  String get companyIcon => 'Icon';
+
+  @override
+  String get companyHide => 'Hide company';
+
+  @override
+  String get companyShow => 'Show company';
+
+  @override
+  String get companiesHidden => 'Hidden companies';
 }

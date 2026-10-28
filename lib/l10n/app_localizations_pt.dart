@@ -12483,4 +12483,19 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get agentShowChat => 'Ver como chat';
+
+  @override
+  String get companyColor => 'Cor';
+
+  @override
+  String get companyIcon => 'Ícone';
+
+  @override
+  String get companyHide => 'Ocultar empresa';
+
+  @override
+  String get companyShow => 'Mostrar empresa';
+
+  @override
+  String get companiesHidden => 'Empresas ocultas';
 }

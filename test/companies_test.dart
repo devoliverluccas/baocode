@@ -28,6 +28,18 @@ void main() {
     companies.load();
     expect(companies.of(project)?.name, 'LUTECH');
 
+    // Its look and whether it is hidden are kept, renamed too.
+    companies.put(
+      'LUTECH',
+      '/h/.claude-stark',
+      color: 0xFF81C784,
+      icon: 'moon',
+    );
+    companies.setHidden('LUTECH', true);
+    companies.load();
+    final kept = companies.byName('LUTECH')!;
+    expect((kept.color, kept.icon, kept.hidden), (0xFF81C784, 'moon', true));
+
     // Deleted: the project is in none, still with the Claude it ran with.
     companies.remove('LUTECH');
     expect(companies.of(project), isNull);

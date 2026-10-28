@@ -20212,6 +20212,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Show as chat'**
   String get agentShowChat;
+
+  /// No description provided for @companyColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Color'**
+  String get companyColor;
+
+  /// No description provided for @companyIcon.
+  ///
+  /// In en, this message translates to:
+  /// **'Icon'**
+  String get companyIcon;
+
+  /// No description provided for @companyHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide company'**
+  String get companyHide;
+
+  /// No description provided for @companyShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show company'**
+  String get companyShow;
+
+  /// No description provided for @companiesHidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Hidden companies'**
+  String get companiesHidden;
 }
 
 class _AppLocalizationsDelegate

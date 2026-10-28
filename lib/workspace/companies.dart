@@ -9,12 +9,55 @@ import '../kernel/claude_code/claude_environment.dart';
 /// A company the projects are grouped under in the sidebar, and the Claude
 /// Code profile (its config dir, `~/.claude-promov`) its projects run with.
 class Company {
-  const Company(this.name, this.profile);
+  const Company(
+    this.name,
+    this.profile, {
+    this.color,
+    this.icon,
+    this.hidden = false,
+  });
+
+  factory Company.fromJson(Map<Object?, Object?> json) => Company(
+    json['name'] as String,
+    json['profile'] as String,
+    color: json['color'] as int?,
+    icon: json['icon'] as String?,
+    hidden: json['hidden'] == true,
+  );
 
   final String name;
   final String profile;
 
-  Map<String, Object?> toJson() => {'name': name, 'profile': profile};
+  /// Its folder's color in the sidebar, as ARGB; null: the list's.
+  final int? color;
+
+  /// Its icon's name (see `companyIcons`); null: a folder.
+  final String? icon;
+
+  /// Out of the way: listed under the hidden companies, its projects not.
+  final bool hidden;
+
+  Company copyWith({
+    String? name,
+    String? profile,
+    int? Function()? color,
+    String? Function()? icon,
+    bool? hidden,
+  }) => Company(
+    name ?? this.name,
+    profile ?? this.profile,
+    color: color == null ? this.color : color(),
+    icon: icon == null ? this.icon : icon(),
+    hidden: hidden ?? this.hidden,
+  );
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'profile': profile,
+    'color': ?color,
+    'icon': ?icon,
+    if (hidden) 'hidden': true,
+  };
 }
 
 /// The companies and which one each project folder is in, kept in [file]
@@ -41,8 +84,7 @@ class Companies extends ChangeNotifier {
       _list
         ..clear()
         ..addAll([
-          for (final c in json['companies'] as List)
-            Company((c as Map)['name'] as String, c['profile'] as String),
+          for (final c in json['companies'] as List) Company.fromJson(c as Map),
         ]);
       _projects
         ..clear()
@@ -79,12 +121,16 @@ class Companies extends ChangeNotifier {
 
   /// Adds a company, or changes the profile of the one named so; its
   /// projects follow.
-  void put(String name, String profile) {
+  void put(String name, String profile, {int? color, String? icon}) {
     final i = _list.indexWhere((c) => c.name == name);
     if (i < 0) {
-      _list.add(Company(name, profile));
+      _list.add(Company(name, profile, color: color, icon: icon));
     } else {
-      _list[i] = Company(name, profile);
+      _list[i] = _list[i].copyWith(
+        profile: profile,
+        color: () => color,
+        icon: () => icon,
+      );
     }
     for (final MapEntry(:key, :value) in _projects.entries) {
       if (value == name) ClaudeEnvironment.setProfile(key, profile);
@@ -95,8 +141,16 @@ class Companies extends ChangeNotifier {
   void rename(String from, String to) {
     final company = byName(from);
     if (company == null || from == to || byName(to) != null) return;
-    _list[_list.indexOf(company)] = Company(to, company.profile);
+    _list[_list.indexOf(company)] = company.copyWith(name: to);
     _projects.updateAll((_, value) => value == from ? to : value);
+    _save();
+  }
+
+  /// Hides the company named [name], or shows it again.
+  void setHidden(String name, bool hidden) {
+    final i = _list.indexWhere((c) => c.name == name);
+    if (i < 0 || _list[i].hidden == hidden) return;
+    _list[i] = _list[i].copyWith(hidden: hidden);
     _save();
   }
 

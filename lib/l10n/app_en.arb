@@ -8185,5 +8185,10 @@
   },
   "sidebarGroupingActive": "Active",
   "agentShowTerminal": "Show as terminal",
-  "agentShowChat": "Show as chat"
+  "agentShowChat": "Show as chat",
+  "companyColor": "Color",
+  "companyIcon": "Icon",
+  "companyHide": "Hide company",
+  "companyShow": "Show company",
+  "companiesHidden": "Hidden companies"
 }

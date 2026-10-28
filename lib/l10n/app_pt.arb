@@ -3350,5 +3350,10 @@
   "projectUnarchive": "Desarquivar",
   "sidebarGroupingActive": "Ativas",
   "agentShowTerminal": "Ver como terminal",
-  "agentShowChat": "Ver como chat"
+  "agentShowChat": "Ver como chat",
+  "companyColor": "Cor",
+  "companyIcon": "Ícone",
+  "companyHide": "Ocultar empresa",
+  "companyShow": "Mostrar empresa",
+  "companiesHidden": "Empresas ocultas"
 }
