@@ -2384,8 +2384,9 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       _collapsedGroups.addAll(list('collapsed'));
       _terminalView.addAll(list('terminalView'));
       _showArchived = sidebar['showArchived'] == true;
-      if (sidebar['width'] case final num width)
+      if (sidebar['width'] case final num width) {
         _sidebarWidth = width.toDouble();
+      }
       _pinned.addAll(list('pinned'));
       _archived.addAll(list('archived'));
       _names.addAll(strings(sidebar['names']));
