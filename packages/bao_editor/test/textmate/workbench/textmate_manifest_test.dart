@@ -182,8 +182,10 @@ void main() {
     test('themes', () {
       // VS Code's but Light (Visual Studio), Light+, Dark (Visual Studio),
       // Dark 2026, Light 2026, Monokai, Abyss and Quiet Light, which the
-      // assets leave out, and BaoCode's own Bao Dark and Bao Light.
-      expect(manifest.themes, hasLength(13));
+      // assets leave out, and BaoCode's own Bao and Twitter themes.
+      expect(manifest.themes, hasLength(15));
+      expect(manifest.themeById('Twitter Dark')!.uiTheme, 'vs-dark');
+      expect(manifest.themeById('Twitter Light')!.uiTheme, 'vs');
       final baoDark = manifest.themeById('Bao Dark')!;
       expect(baoDark.uiTheme, 'vs-dark');
       expect(

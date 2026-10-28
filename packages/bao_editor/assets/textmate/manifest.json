@@ -2387,6 +2387,20 @@
       "label": "Bao Light",
       "uiTheme": "vs",
       "path": "themes/theme-bao/themes/bao-light-color-theme.json"
+    },
+    {
+      "extension": "theme-bao",
+      "id": "Twitter Dark",
+      "label": "Twitter Dark",
+      "uiTheme": "vs-dark",
+      "path": "themes/theme-bao/themes/twitter-dark-color-theme.json"
+    },
+    {
+      "extension": "theme-bao",
+      "id": "Twitter Light",
+      "label": "Twitter Light",
+      "uiTheme": "vs",
+      "path": "themes/theme-bao/themes/twitter-light-color-theme.json"
     }
   ]
 }

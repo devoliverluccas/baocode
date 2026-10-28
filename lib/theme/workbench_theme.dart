@@ -55,10 +55,11 @@ export 'package:bao_editor/monaco/vs/platform/theme/common/theme.dart'
         isHighContrast;
 
 /// `ThemeSettingDefaults`: the default theme of each color scheme. Ours are
-/// Bao Dark and Bao Light, not upstream's Dark 2026 and Light 2026.
+/// Twitter Dark and Twitter Light (shadcn's twitter theme over Bao's), not
+/// upstream's Dark 2026 and Light 2026.
 abstract final class ThemeSettingDefaults {
-  static const colorThemeDark = 'Bao Dark';
-  static const colorThemeLight = 'Bao Light';
+  static const colorThemeDark = 'Twitter Dark';
+  static const colorThemeLight = 'Twitter Light';
   static const colorThemeHcDark = 'Default High Contrast';
   static const colorThemeHcLight = 'Default High Contrast Light';
 }

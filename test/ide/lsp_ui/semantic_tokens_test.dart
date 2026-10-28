@@ -85,13 +85,13 @@ void main() {
     }
   });
 
-  testWidgets('the default styler is Bao Dark, from the bundled assets', (
+  testWidgets('the default styler is Twitter Dark, from the bundled assets', (
     tester,
   ) async {
-    expect(ideDefaultColorThemeId, 'Bao Dark');
+    expect(ideDefaultColorThemeId, 'Twitter Dark');
     final styler = await ideDefaultSemanticTokenStyler();
-    // VS Code has no recording of Bao Dark: the styler is that of the
-    // manifest's Bao Dark read from the files, and it styles tokens.
+    // VS Code has no recording of Twitter Dark: the styler is that of the
+    // manifest's Twitter Dark read from the files, and it styles tokens.
     final want = ideSemanticTokenStyler(
       (await tester.runAsync(
         () => fixture.loadTheme(ideDefaultColorThemeId),
