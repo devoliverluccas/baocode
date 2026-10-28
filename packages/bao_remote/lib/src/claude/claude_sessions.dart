@@ -450,7 +450,7 @@ List<ClaudeProjectSummary> _scan(String root, String cachePath) {
       if (!file.path.endsWith('.jsonl')) continue;
       final session = cache.summarize(file);
       if (session == null) continue;
-      (byCwd[session.cwd] ??= []).add(session);
+      (byCwd[_canonical(session.cwd)] ??= []).add(session);
     }
   }
   cache.save();
@@ -464,6 +464,17 @@ List<ClaudeProjectSummary> _scan(String root, String cachePath) {
         ),
   ]..sort((a, b) => b.updatedAt!.compareTo(a.updatedAt!));
   return projects;
+}
+
+/// [path] as it is on disk: on Windows `c:\x\STARK` and `C:\X\stark` are
+/// one folder, so one project.
+String _canonical(String path) {
+  if (!Platform.isWindows) return path;
+  try {
+    return Directory(path).resolveSymbolicLinksSync();
+  } on FileSystemException {
+    return path;
+  }
 }
 
 /// What [_summarize] made of each session file, kept between runs: reading
