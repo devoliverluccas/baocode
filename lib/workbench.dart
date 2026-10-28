@@ -597,7 +597,18 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     _sidePanelAsks = _sidePanel.asks;
     _workspace.addListener(_restoreSidePanel);
     _restoreSidePanel();
+    _workspace.addListener(_restoreSidebarWidth);
+    _restoreSidebarWidth();
     _workspace.addListener(_syncWorkspaceFolders);
+  }
+
+  /// The sidebar as wide as it was dragged to last, once the workspace has
+  /// read that.
+  void _restoreSidebarWidth() {
+    if (_workspace.sidebarWidth case final width?) {
+      _workspace.removeListener(_restoreSidebarWidth);
+      if (!_dragging) _width.value = width;
+    }
   }
 
   /// The IDE and side panel of a multi-folder workspace show the folders
@@ -797,6 +808,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       ..dispose();
     _chatCode?.dispose();
     _workspace.removeListener(_restoreSidePanel);
+    _workspace.removeListener(_restoreSidebarWidth);
     _workspace.removeListener(_syncWorkspaceFolders);
     _sidePanel
       ..removeListener(_sidePanelChanged)
@@ -3268,6 +3280,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   final Expando<GlobalKey> _chatKeys = Expando();
 
   void _endDrag() {
+    if (_dragging) _workspace.sidebarWidth = _width.value;
     setState(() {
       _dragging = false;
       _dragOrigin = null;

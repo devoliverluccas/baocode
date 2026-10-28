@@ -1210,6 +1210,15 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     notifyListeners();
   }
 
+  /// How wide the sidebar was dragged to; null until it was.
+  double? get sidebarWidth => _sidebarWidth;
+  double? _sidebarWidth;
+  set sidebarWidth(double? width) {
+    if (width == _sidebarWidth) return;
+    _sidebarWidth = width;
+    _save();
+  }
+
   /// Whether the sidebar lists archived agents.
   bool get showArchived => _showArchived;
   bool _showArchived = false;
@@ -2375,6 +2384,8 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       _collapsedGroups.addAll(list('collapsed'));
       _terminalView.addAll(list('terminalView'));
       _showArchived = sidebar['showArchived'] == true;
+      if (sidebar['width'] case final num width)
+        _sidebarWidth = width.toDouble();
       _pinned.addAll(list('pinned'));
       _archived.addAll(list('archived'));
       _names.addAll(strings(sidebar['names']));
@@ -2487,6 +2498,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
         'collapsed': [..._collapsedGroups],
         'terminalView': [..._terminalView],
         'showArchived': _showArchived,
+        'width': ?_sidebarWidth,
         'pinned': [..._pinned],
         'archived': [..._archived],
         'names': {..._names},
