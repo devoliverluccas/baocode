@@ -148,7 +148,8 @@ class ClaudeSessions {
 
   /// The projects with sessions, the most recently talked in first.
   /// Each project's from its profile's config dir only: what another
-  /// profile kept there is not its to resume.
+  /// profile kept there is not its to resume. With profiles, the projects
+  /// none was picked for are not listed.
   Future<List<ClaudeProjectSummary>> projects() async {
     final roots = await _roots();
     final all = <ClaudeProjectSummary>[];
@@ -157,9 +158,14 @@ class ClaudeSessions {
       // One cache per config dir: each keeps only what it scanned.
       final cache = i == 0 ? cacheFile : '$cacheFile.${p.basename(config)}';
       final found = await Isolate.run(() => _scan(root, cache));
-      if (roots.length == 1) return found;
+      // With profiles, only the projects one was picked for are listed:
+      // what Claude Code ran elsewhere stays out of the app.
+      if (configDir != null || ClaudeEnvironment.profilesFile == null) {
+        return found;
+      }
       for (final project in found) {
-        if (p.equals(await _configFor(project.path), config)) all.add(project);
+        final profile = ClaudeEnvironment.profileFor(project.path);
+        if (profile != null && p.equals(profile, config)) all.add(project);
       }
     }
     return all..sort((a, b) => b.updatedAt!.compareTo(a.updatedAt!));
