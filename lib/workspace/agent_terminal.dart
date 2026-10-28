@@ -15,6 +15,15 @@ import '../network/network_proxy_io.dart';
 import '../theme/app_theme.dart';
 import 'workspace.dart';
 
+/// What a Claude Code sets for what it runs, which another Claude Code
+/// takes as running under it.
+final _childSession = RegExp(
+  r'^(CLAUDECODE|AI_AGENT|CLAUDE_PID|CLAUDE_EFFORT|'
+  r'CLAUDE_CODE_(CHILD_SESSION|SESSION_ID|SESSION_ATTENDED|ENTRYPOINT|'
+  r'EXECPATH|MESSAGING_SOCKET|MESSAGING_TOKEN))$',
+  caseSensitive: false,
+);
+
 /// The agents shown as Claude Code's own terminal (see
 /// [Workspace.inTerminal]): each one's `claude --resume`, drawn as Warp
 /// draws its terminal.
@@ -54,10 +63,17 @@ class AgentTerminals extends ChangeNotifier {
             ? ['/c', cli.executable, ...arguments]
             : arguments,
         cwd: cwd,
-        env: {
+        env: <String, String?>{
           ...cli.environment,
           ...proxy,
           ...ClaudeEnvironment.stateDirectory(cli.environment, cwd: cwd),
+          // Not a Claude Code's child, should the app have been started
+          // from one: as one, it would draw without colors.
+          for (final name in [
+            ...cli.environment.keys,
+            ...Platform.environment.keys,
+          ])
+            if (_childSession.hasMatch(name)) name: null,
         },
       ),
     );
