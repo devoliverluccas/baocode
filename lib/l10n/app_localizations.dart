@@ -20135,17 +20135,65 @@ abstract class AppLocalizations {
   /// **'{original} ↔ {modified}'**
   String compareFilesLabel(String original, String modified);
 
-  /// No description provided for @claudeProfileTitle.
+  /// No description provided for @companyPickTitle.
   ///
   /// In en, this message translates to:
-  /// **'Which Claude for {project}?'**
-  String claudeProfileTitle(String project);
+  /// **'Which company is {project} in?'**
+  String companyPickTitle(String project);
 
-  /// No description provided for @claudeProfileMenu.
+  /// No description provided for @companyNew.
   ///
   /// In en, this message translates to:
-  /// **'Claude profile…'**
-  String get claudeProfileMenu;
+  /// **'New company…'**
+  String get companyNew;
+
+  /// No description provided for @companyEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit company'**
+  String get companyEdit;
+
+  /// No description provided for @companyName.
+  ///
+  /// In en, this message translates to:
+  /// **'Company name'**
+  String get companyName;
+
+  /// No description provided for @companyClaude.
+  ///
+  /// In en, this message translates to:
+  /// **'Claude for its projects'**
+  String get companyClaude;
+
+  /// No description provided for @companyNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No company'**
+  String get companyNone;
+
+  /// No description provided for @companyMove.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to company…'**
+  String get companyMove;
+
+  /// No description provided for @companyDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete company'**
+  String get companyDelete;
+
+  /// No description provided for @projectsArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived projects'**
+  String get projectsArchived;
+
+  /// No description provided for @projectUnarchive.
+  ///
+  /// In en, this message translates to:
+  /// **'Unarchive'**
+  String get projectUnarchive;
 }
 
 class _AppLocalizationsDelegate

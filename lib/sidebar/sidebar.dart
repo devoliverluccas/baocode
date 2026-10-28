@@ -36,7 +36,8 @@ import '../theme/codicons.dart';
 import '../theme/workbench_theme.dart' show themeColors;
 import '../update/update_service.dart';
 import '../workspace/chat_drag.dart';
-import '../workspace/claude_profile_dialog.dart';
+import '../workspace/companies.dart';
+import '../workspace/company_dialog.dart';
 import '../workspace/editor_launcher.dart';
 import '../workspace/title_bar_double_click.dart';
 import '../workspace/window_controls.dart';
@@ -85,7 +86,15 @@ String relativeTime(DateTime time, DateTime now, [AppLocalizations? l10n]) {
 
 /// A heading and the agents under it.
 class _Group {
-  const _Group(this.id, this.label, this.threads, {this.project});
+  const _Group(
+    this.id,
+    this.label,
+    this.threads, {
+    this.project,
+    this.company,
+    this.nested = false,
+    this.archived = false,
+  });
 
   final String id;
   final String label;
@@ -94,6 +103,16 @@ class _Group {
   /// Set for a project group, which can start a new agent there.
   final Project? project;
 
+  /// Set for a company's header (see [Companies]): its name; empty for the
+  /// projects in none, and for the archived projects'.
+  final String? company;
+
+  /// A project's under a company's header, set in under it.
+  final bool nested;
+
+  /// An archived project's: put back from its menu.
+  final bool archived;
+
   bool get pinned => id == _pinnedGroup;
 }
 
@@ -101,6 +120,9 @@ const _pinnedGroup = 'pinned';
 
 /// The group of the archived agents, while they show.
 const _archivedGroup = 'archived';
+
+/// The header of the projects taken off the sidebar.
+const _archivedProjectsGroup = 'company:#archived';
 
 /// Where an agent dragged within the list would go: in [group], before or
 /// after an agent there, or on top (neither).
@@ -354,6 +376,7 @@ class _SidebarState extends State<Sidebar>
       setState(() {});
     });
     _workspace.addListener(_markRowsDirty);
+    Companies.instance.addListener(_timesChanged);
     SidebarTimes.shown.addListener(_timesChanged);
     _listFocus.addListener(_focusChanged);
     widget.link?._state = this;
@@ -407,6 +430,7 @@ class _SidebarState extends State<Sidebar>
     if (widget.link?._state == this) widget.link!._state = null;
     _detachDrag(widget.drag);
     _workspace.removeListener(_markRowsDirty);
+    Companies.instance.removeListener(_timesChanged);
     SidebarTimes.shown.removeListener(_timesChanged);
     _clock.cancel();
     _autoScroll?.cancel();
@@ -425,7 +449,11 @@ class _SidebarState extends State<Sidebar>
   bool _collapsible(_Group group) => group.project == null || _projectsShown;
 
   bool _collapsed(_Group group) =>
-      _collapsible(group) && _workspace.isCollapsed(group.id);
+      _collapsible(group) && _isCollapsed(group.id);
+
+  /// The archived projects' header starts folded: toggled, it opens.
+  bool _isCollapsed(String id) =>
+      _workspace.isCollapsed(id) != (id == _archivedProjectsGroup);
 
   /// A project's most recent agents, unless asked for all (the open one
   /// too, wherever it is).
@@ -653,23 +681,7 @@ class _SidebarState extends State<Sidebar>
       if (pinned.isNotEmpty || _pinZone)
         _Group(_pinnedGroup, l10n.sidebarPinned, pinned),
       ...switch (_grouping) {
-        SidebarGrouping.project => [
-          for (final project in _workspace.sidebarProjectsHere)
-            _Group(
-              Workspace.projectGroup(project.path),
-              // Every host's together: a remote one's says where it is.
-              switch (project.host) {
-                final host? when _workspace.sidebarAllHosts =>
-                  '${project.name} · ${_workspace.hostLabel(host)}',
-                _ => project.name,
-              },
-              _workspace.inProjectOrder(
-                project,
-                where((thread) => thread.project == project),
-              ),
-              project: project,
-            ),
-        ],
+        SidebarGrouping.project => _projectGroups(where),
         SidebarGrouping.time => [
           _Group('today', l10n.sidebarToday, where((t) => daysAgo(t) <= 0)),
           _Group(
@@ -712,6 +724,89 @@ class _SidebarState extends State<Sidebar>
           for (final thread in threads)
             if (thread.archived) thread,
         ]),
+    ];
+  }
+
+  /// The projects' groups, under their companies' headers when there are
+  /// companies (see [Companies]), the archived projects' last.
+  List<_Group> _projectGroups(
+    List<AgentThread> Function(bool Function(AgentThread)) where,
+  ) {
+    final l10n = context.l10n;
+    _Group group(Project project, {bool nested = false}) => _Group(
+      Workspace.projectGroup(project.path),
+      // Every host's together: a remote one's says where it is.
+      switch (project.host) {
+        final host? when _workspace.sidebarAllHosts =>
+          '${project.name} · ${_workspace.hostLabel(host)}',
+        _ => project.name,
+      },
+      _workspace.inProjectOrder(
+        project,
+        where((thread) => thread.project == project),
+      ),
+      project: project,
+      nested: nested,
+    );
+    final projects = _workspace.sidebarProjectsHere;
+    final companies = Companies.instance;
+    final archived = _workspace.archivedProjects;
+    _Group header(String id, String label, String company) =>
+        _Group('company:$id', label, const [], company: company);
+    bool open(String id) => !_isCollapsed('company:$id');
+    final none = [
+      for (final project in projects)
+        if (companies.of(project.path) == null) project,
+    ];
+    return [
+      if (companies.list.isEmpty)
+        for (final project in projects) group(project)
+      else ...[
+        for (final company in companies.list) ...[
+          header(company.name, company.name, company.name),
+          if (open(company.name))
+            for (final project in projects)
+              if (companies.of(project.path)?.name == company.name)
+                group(project, nested: true),
+        ],
+        if (none.isNotEmpty) ...[
+          header('', l10n.companyNone, ''),
+          if (open('')) for (final project in none) group(project, nested: true),
+        ],
+      ],
+      if (archived.isNotEmpty) ...[
+        header('#archived', l10n.projectsArchived, ''),
+        if (open('#archived'))
+          for (final project in archived)
+            _Group(
+              Workspace.projectGroup(project.path),
+              project.name,
+              const [],
+              project: project,
+              nested: true,
+              archived: true,
+            ),
+      ],
+    ];
+  }
+
+  /// A company's menu: edit it (its name, its Claude) or delete it.
+  List<SidebarMenuItem> _companyItems(String name) {
+    final l10n = context.l10n;
+    final company = Companies.instance.byName(name);
+    if (company == null) return const [];
+    return [
+      SidebarMenuItem(
+        l10n.companyEdit,
+        icon: Icons.edit_outlined,
+        onSelected: () => unawaited(editCompany(context, editing: company)),
+      ),
+      SidebarMenuItem(
+        l10n.companyDelete,
+        icon: Icons.delete_outline_rounded,
+        destructive: true,
+        onSelected: () => Companies.instance.remove(name),
+      ),
     ];
   }
 
@@ -1260,10 +1355,16 @@ class _SidebarState extends State<Sidebar>
       final groups = [
         for (final group in _groups())
           // Empty projects stay to start an agent in; other empty groups go.
-          if (group.threads.isNotEmpty || group.project != null || group.pinned)
+          if (group.threads.isNotEmpty ||
+              group.project != null ||
+              group.pinned ||
+              group.company != null)
             group,
       ];
-      _listProjects = [for (final group in groups) ?group.project];
+      _listProjects = [
+        for (final group in groups)
+          if (!group.archived) ?group.project,
+      ];
       final rows = <_ListRow>[];
       for (final group in groups) {
         rows.add(_ListRow(_ListRowKind.header, group, ValueKey(group.id), 32));
@@ -1427,11 +1528,23 @@ class _SidebarState extends State<Sidebar>
       collapsed: _collapsed(group),
       light: !collapsible,
       onToggle: collapsible ? () => _workspace.toggleCollapsed(group.id) : null,
-      onCreate: project == null ? null : () => _create(project),
+      onCreate: project == null || group.archived
+          ? null
+          : () => _create(project),
       // The archived agents' as the footer's toggle has it: unarchive or
       // delete them all.
-      menu: project != null
+      menu: project != null && group.archived
+          ? () => [
+              SidebarMenuItem(
+                context.l10n.projectUnarchive,
+                icon: Icons.unarchive_outlined,
+                onSelected: () => _workspace.unarchiveProject(project),
+              ),
+            ]
+          : project != null
           ? () => _projectItems(project)
+          : group.company?.isNotEmpty ?? false
+          ? () => _companyItems(group.company!)
           : group.id == _archivedGroup
           ? () => _archivedItems(context.l10n)
           : null,
@@ -1454,7 +1567,9 @@ class _SidebarState extends State<Sidebar>
     );
     // Projects are ordered by dragging their headers, where there are
     // several to order.
-    if (project == null || projects.length < 2) return header;
+    if (project == null || group.archived || projects.length < 2) {
+      return header;
+    }
     return _ProjectDragSource(
       onStart: () => setState(() => _draggedProject = project),
       onUpdate: (position) => _moveProjectDrag(position, projects),
@@ -1601,10 +1716,10 @@ class _SidebarState extends State<Sidebar>
         ),
       if (project.host == null)
         SidebarMenuItem(
-          l10n.claudeProfileMenu,
-          icon: Icons.account_circle_outlined,
+          l10n.companyMove,
+          icon: Icons.business_outlined,
           onSelected: () => unawaited(
-            pickClaudeProfile(context, project.path, change: true),
+            pickCompany(context, project.path, change: true),
           ),
         ),
       SidebarMenuItem(
@@ -2319,7 +2434,10 @@ class _GroupHeader extends StatelessWidget {
           child: Container(
             height: 26,
             margin: const EdgeInsets.only(top: 6),
-            padding: EdgeInsets.only(left: light ? 6 : 4, right: 2),
+            padding: EdgeInsets.only(
+              left: (light ? 6 : 4) + (group.nested ? 12 : 0),
+              right: 2,
+            ),
             decoration: BoxDecoration(
               color: (active || dragged) && project != null
                   ? AppColors.hover
@@ -2423,9 +2541,11 @@ class _GroupHeader extends StatelessWidget {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
-        color: project != null ? AppColors.text : AppColors.textMuted,
+        color: project != null || group.company != null
+            ? AppColors.text
+            : AppColors.textMuted,
         fontSize: project != null ? 12.5 : 11.5,
-        fontWeight: FontWeight.w500,
+        fontWeight: group.company != null ? FontWeight.w700 : FontWeight.w500,
       ),
     );
     if (project == null) return label;

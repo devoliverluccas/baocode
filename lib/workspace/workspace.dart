@@ -1308,6 +1308,19 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     if (_hiddenProjects.remove(path) != null) _save();
   }
 
+  /// The projects taken off the sidebar, where it lists: listed under
+  /// them, to be put back.
+  List<Project> get archivedProjects => [
+    for (final project in _projects)
+      if (isHidden(project) && listsHost(project.host)) project,
+  ];
+
+  /// Puts [project], taken off the sidebar, back on it.
+  void unarchiveProject(Project project) {
+    _unhide(project.path);
+    notifyListeners();
+  }
+
   /// The order the user dragged projects in, by path.
   final List<String> _projectOrder = [];
 

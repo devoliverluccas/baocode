@@ -595,7 +595,7 @@
   "sidebarDeleteArchived": "Excluir Todos os Arquivados…",
   "sidebarDeleteArchivedTitle": "Excluir agentes arquivados?",
   "sidebarDeleteArchivedMessage": "{count, plural, =1{O agente arquivado e a conversa dele serão excluídos} other{Os {count} agentes arquivados e as conversas deles serão excluídos}}, inclusive dos kernels. Esta ação não pode ser desfeita.",
-  "sidebarRemoveFromList": "Remover da Lista",
+  "sidebarRemoveFromList": "Arquivar projeto",
   "sidebarDropToPin": "Solte aqui para fixar",
   "sidebarMoreActions": "Mais Ações…",
   "sidebarChangeIcon": "Alterar Ícone…",
@@ -3338,6 +3338,14 @@
   "localHistoryLabel": "{name} (Histórico local, {time})",
   "explorerCompareSelected": "Comparar selecionados",
   "compareFilesLabel": "{original} ↔ {modified}",
-  "claudeProfileTitle": "Qual Claude usar em {project}?",
-  "claudeProfileMenu": "Perfil do Claude…"
+  "companyPickTitle": "Em qual empresa fica {project}?",
+  "companyNew": "Nova empresa…",
+  "companyEdit": "Editar empresa",
+  "companyName": "Nome da empresa",
+  "companyClaude": "Claude dos projetos dela",
+  "companyNone": "Sem empresa",
+  "companyMove": "Mover para empresa…",
+  "companyDelete": "Excluir empresa",
+  "projectsArchived": "Projetos arquivados",
+  "projectUnarchive": "Desarquivar"
 }

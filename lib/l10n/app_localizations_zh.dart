@@ -11688,10 +11688,34 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String claudeProfileTitle(String project) {
-    return '$project 使用哪个 Claude？';
+  String companyPickTitle(String project) {
+    return 'Which company is $project in?';
   }
 
   @override
-  String get claudeProfileMenu => 'Claude 配置…';
+  String get companyNew => 'New company…';
+
+  @override
+  String get companyEdit => 'Edit company';
+
+  @override
+  String get companyName => 'Company name';
+
+  @override
+  String get companyClaude => 'Claude for its projects';
+
+  @override
+  String get companyNone => 'No company';
+
+  @override
+  String get companyMove => 'Move to company…';
+
+  @override
+  String get companyDelete => 'Delete company';
+
+  @override
+  String get projectsArchived => 'Archived projects';
+
+  @override
+  String get projectUnarchive => 'Unarchive';
 }

@@ -3345,7 +3345,5 @@
   "localHistoryPick": "选择“{name}”的一个版本来比较",
   "localHistoryLabel": "{name}（本地历史，{time}）",
   "explorerCompareSelected": "比较所选文件",
-  "compareFilesLabel": "{original} \u2194 {modified}",
-  "claudeProfileTitle": "{project} 使用哪个 Claude？",
-  "claudeProfileMenu": "Claude 配置…"
+  "compareFilesLabel": "{original} \u2194 {modified}"
 }

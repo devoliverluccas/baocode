@@ -117,7 +117,7 @@ import 'window/app_windows.dart';
 import 'window/code_args.dart';
 import 'window/window_settings.dart';
 import 'remote/open_remote.dart';
-import 'workspace/claude_profile_dialog.dart';
+import 'workspace/company_dialog.dart';
 import 'remote/project_host.dart';
 import 'remote/remote_customization_disk.dart';
 import 'remote/remote_files.dart';
@@ -3527,7 +3527,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   Future<void> _openFolder() async {
     final path = await WindowControls.pickDirectory();
     if (path == null || !mounted) return;
-    if (!await pickClaudeProfile(context, path) || !mounted) return;
+    if (!await pickCompany(context, path) || !mounted) return;
     final thread = await _workspace.openFolder(path);
     _closeDrawer();
     if (mounted) _watchFirstTurn(thread);

@@ -2086,7 +2086,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get sidebarRemoveFromList => 'Remover da Lista';
+  String get sidebarRemoveFromList => 'Arquivar projeto';
 
   @override
   String get sidebarDropToPin => 'Solte aqui para fixar';
@@ -12444,10 +12444,34 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String claudeProfileTitle(String project) {
-    return 'Qual Claude usar em $project?';
+  String companyPickTitle(String project) {
+    return 'Em qual empresa fica $project?';
   }
 
   @override
-  String get claudeProfileMenu => 'Perfil do Claude…';
+  String get companyNew => 'Nova empresa…';
+
+  @override
+  String get companyEdit => 'Editar empresa';
+
+  @override
+  String get companyName => 'Nome da empresa';
+
+  @override
+  String get companyClaude => 'Claude dos projetos dela';
+
+  @override
+  String get companyNone => 'Sem empresa';
+
+  @override
+  String get companyMove => 'Mover para empresa…';
+
+  @override
+  String get companyDelete => 'Excluir empresa';
+
+  @override
+  String get projectsArchived => 'Projetos arquivados';
+
+  @override
+  String get projectUnarchive => 'Desarquivar';
 }

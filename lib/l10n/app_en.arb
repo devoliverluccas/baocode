@@ -8168,11 +8168,19 @@
   "explorerCompareSelected": "Compare Selected",
   "compareFilesLabel": "{original} \u2194 {modified}",
   "@compareFilesLabel": {"placeholders": {"original": {"type": "String"}, "modified": {"type": "String"}}},
-  "claudeProfileTitle": "Which Claude for {project}?",
-  "@claudeProfileTitle": {
+  "companyPickTitle": "Which company is {project} in?",
+  "companyNew": "New company…",
+  "companyEdit": "Edit company",
+  "companyName": "Company name",
+  "companyClaude": "Claude for its projects",
+  "companyNone": "No company",
+  "companyMove": "Move to company…",
+  "companyDelete": "Delete company",
+  "projectsArchived": "Archived projects",
+  "projectUnarchive": "Unarchive",
+  "@companyPickTitle": {
     "placeholders": {
       "project": {"type": "String"}
     }
-  },
-  "claudeProfileMenu": "Claude profile…"
+  }
 }

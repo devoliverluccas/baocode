@@ -47,6 +47,7 @@ import 'icons/site_icons.dart';
 import 'kernel/claude_code/claude_code_kernel.dart';
 import 'kernel/claude_code/claude_core_setting.dart';
 import 'kernel/claude_code/claude_environment.dart';
+import 'workspace/companies.dart';
 import 'kernel/claude_code/claude_onboarding.dart';
 import 'kernel/claude_code/claude_path_setting.dart';
 import 'kernel/claude_code/process_transport.dart';
@@ -147,6 +148,8 @@ Future<void> main(List<String> arguments) async {
       DataDirectory.current.path,
       'claude-profiles.json',
     );
+    Companies.file = p.join(DataDirectory.current.path, 'companies.json');
+    Companies.instance.load();
     // What goes wrong unseen from here on, kept for the user to send.
     errors = ErrorLog(DataDirectory.current.logsDir)..install();
     // And what the app went through, to read what led to it; how the run
