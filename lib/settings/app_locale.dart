@@ -25,7 +25,8 @@ class MemoryLocaleStorage implements LocaleStorage {
 }
 
 /// The display language setting, with VS Code's `locale` values: null
-/// follows the system, else [english] or [simplifiedChinese]. The app
+/// follows the system, else [english], [simplifiedChinese] or
+/// [brazilianPortuguese]. The app
 /// rebuilds on it, so a change applies at once.
 class AppLocale extends ChangeNotifier {
   AppLocale({LocaleStorage? storage})
@@ -53,13 +54,18 @@ class AppLocale extends ChangeNotifier {
 
   static const english = 'en';
   static const simplifiedChinese = 'zh-cn';
+  static const brazilianPortuguese = 'pt-br';
 
   /// The languages the app is translated into, as settings.
-  static const settings = [english, simplifiedChinese];
+  static const settings = [english, simplifiedChinese, brazilianPortuguese];
 
   /// The locales the app supports, for `MaterialApp.supportedLocales`: the
   /// system's is resolved to one of these (English when none matches).
-  static const supportedLocales = [Locale('en'), Locale('zh', 'CN')];
+  static const supportedLocales = [
+    Locale('en'),
+    Locale('zh', 'CN'),
+    Locale('pt', 'BR'),
+  ];
 
   /// Null follows the system.
   String? get setting => _setting;
@@ -79,6 +85,7 @@ class AppLocale extends ChangeNotifier {
   static Locale? localeOf(String? setting) => switch (normalize(setting)) {
     english => const Locale('en'),
     simplifiedChinese => const Locale('zh', 'CN'),
+    brazilianPortuguese => const Locale('pt', 'BR'),
     _ => null,
   };
 
@@ -94,6 +101,7 @@ class AppLocale extends ChangeNotifier {
         lower.startsWith('zh-hans')) {
       return simplifiedChinese;
     }
+    if (lower == 'pt' || lower.startsWith('pt-')) return brazilianPortuguese;
     return null;
   }
 

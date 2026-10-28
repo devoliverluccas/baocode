@@ -144,7 +144,8 @@ class ClaudeCodeKernel
     _approval = _pick(
       settings[KernelChoiceKind.permission.name],
       _approvals,
-      'default',
+      // Fork: full access unless picked otherwise.
+      'bypassPermissions',
     );
     _model = settings[KernelChoiceKind.model.name];
     _effort = settings[KernelChoiceKind.effort.name];
@@ -393,7 +394,7 @@ class ClaudeCodeKernel
   // Plan, which is a permission mode of its own (see _cliMode). Ask is only
   // said to the model.
   String _work = 'agent';
-  String _approval = 'default';
+  String _approval = 'bypassPermissions';
 
   /// The last message went out in Ask: the next one, out of it, says so.
   bool _inAsk = false;

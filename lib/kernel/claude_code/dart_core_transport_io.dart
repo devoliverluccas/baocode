@@ -58,7 +58,7 @@ class DartCoreTransport implements ClaudeCodeTransport {
     }
     environment
       ..addAll(ClaudeLaunch.environment)
-      ..addAll(ClaudeEnvironment.stateDirectory(base));
+      ..addAll(ClaudeEnvironment.stateDirectory(base, cwd: launch.cwd));
     final instructions = launch.instructions;
     return EngineOptions(
       cwd: launch.cwd,

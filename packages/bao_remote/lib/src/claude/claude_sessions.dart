@@ -101,6 +101,36 @@ class ClaudeSessions {
   Future<String> _config() async =>
       configDir ?? await ClaudeEnvironment.configDir();
 
+  /// Every config dir sessions may be in: [_config]'s and each profile's
+  /// (see [ClaudeEnvironment.profiles]); only [configDir] when given.
+  Future<List<String>> _roots() async {
+    final config = await _config();
+    if (configDir != null) return [config];
+    return {
+      config,
+      ...ClaudeEnvironment.profiles().values,
+    }.toList();
+  }
+
+  /// The config dir the sessions in [cwd] are kept in: its profile's.
+  Future<String> _configFor(String cwd) async =>
+      configDir == null ? ClaudeEnvironment.profileFor(cwd) ?? await _config()
+          : await _config();
+
+  /// The config dir the session [id] is kept in; [_config] when none has
+  /// it.
+  Future<String> _configOf(String id) async {
+    final roots = await _roots();
+    for (final root in roots) {
+      final projects = Directory('$root/projects');
+      if (!projects.existsSync()) continue;
+      for (final project in projects.listSync().whereType<Directory>()) {
+        if (File(p.join(project.path, '$id.jsonl')).existsSync()) return root;
+      }
+    }
+    return roots.first;
+  }
+
   /// A session id names files and directories: nothing else may pass.
   static void _checkId(String id) {
     if (!RegExp(r'^[0-9a-zA-Z][0-9a-zA-Z_-]*$').hasMatch(id)) {
@@ -111,16 +141,28 @@ class ClaudeSessions {
   /// Deletes the session [id] and everything kept with it, for good.
   Future<void> delete(String id) async {
     _checkId(id);
-    final config = await _config();
+    final config = await _configOf(id);
     final temp = tempDir ?? AppPaths.tempDir;
     return Isolate.run(() => _delete(id, config, temp));
   }
 
   /// The projects with sessions, the most recently talked in first.
+  /// Each project's from its profile's config dir only: what another
+  /// profile kept there is not its to resume.
   Future<List<ClaudeProjectSummary>> projects() async {
-    final root = '${await _config()}/projects';
-    final cache = cacheFile;
-    return Isolate.run(() => _scan(root, cache));
+    final roots = await _roots();
+    final all = <ClaudeProjectSummary>[];
+    for (final (i, config) in roots.indexed) {
+      final root = '$config/projects';
+      // One cache per config dir: each keeps only what it scanned.
+      final cache = i == 0 ? cacheFile : '$cacheFile.${p.basename(config)}';
+      final found = await Isolate.run(() => _scan(root, cache));
+      if (roots.length == 1) return found;
+      for (final project in found) {
+        if (p.equals(await _configFor(project.path), config)) all.add(project);
+      }
+    }
+    return all..sort((a, b) => b.updatedAt!.compareTo(a.updatedAt!));
   }
 
   /// The session's conversation along the branch it ended on.
@@ -151,7 +193,7 @@ class ClaudeSessions {
   /// session yet.
   Future<List<Map<String, Object?>>> goal(String id) async {
     _checkId(id);
-    final config = await _config();
+    final config = await _configOf(id);
     return Isolate.run(() => _goal(id, config));
   }
 
@@ -168,7 +210,7 @@ class ClaudeSessions {
   }) async {
     _checkId(id);
     _checkId(into);
-    final config = await _config();
+    final config = await _configOf(id);
     return Isolate.run(() => _fork(id, into, config, before, title));
   }
 
@@ -178,7 +220,7 @@ class ClaudeSessions {
   /// beside them and the project's memory. Claude Code lists and resumes
   /// them there from then on. Returns how many moved.
   Future<int> move(String from, String to) async {
-    final config = await _config();
+    final config = await _configFor(from);
     return Isolate.run(() => _move(from, to, config));
   }
 }

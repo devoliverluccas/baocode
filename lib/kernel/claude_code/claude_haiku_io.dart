@@ -148,7 +148,10 @@ Future<(String, int)> _run(
         ...proxy,
         if (env != null)
           for (final name in ClaudeModelVariables.inherited) name: '',
-        ...ClaudeEnvironment.stateDirectory(cli.environment),
+        ...ClaudeEnvironment.stateDirectory(
+          cli.environment,
+          cwd: tools?.directory,
+        ),
       },
       includeParentEnvironment: Platform.isWindows,
       runInShell: cli.throughShell,
@@ -216,7 +219,9 @@ Future<(String, int)> _runBuiltin(
       environment.remove(name);
     }
   }
-  environment.addAll(ClaudeEnvironment.stateDirectory(base));
+  environment.addAll(
+    ClaudeEnvironment.stateDirectory(base, cwd: tools?.directory),
+  );
   final options = EngineOptions(
     // Elsewhere than a project, unless it is to look at one.
     cwd: switch (tools?.directory) {

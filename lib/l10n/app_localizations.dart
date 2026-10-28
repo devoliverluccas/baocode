@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
 import 'app_localizations_en.dart';
+import 'app_localizations_pt.dart';
 import 'app_localizations_zh.dart';
 
 // ignore_for_file: type=lint
@@ -95,6 +96,7 @@ abstract class AppLocalizations {
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('en'),
+    Locale('pt'),
     Locale('zh'),
   ];
 
@@ -20132,6 +20134,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{original} ↔ {modified}'**
   String compareFilesLabel(String original, String modified);
+
+  /// No description provided for @claudeProfileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Which Claude for {project}?'**
+  String claudeProfileTitle(String project);
+
+  /// No description provided for @claudeProfileMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Claude profile…'**
+  String get claudeProfileMenu;
 }
 
 class _AppLocalizationsDelegate
@@ -20145,7 +20159,7 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['en', 'zh'].contains(locale.languageCode);
+      <String>['en', 'pt', 'zh'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
@@ -20156,6 +20170,8 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   switch (locale.languageCode) {
     case 'en':
       return AppLocalizationsEn();
+    case 'pt':
+      return AppLocalizationsPt();
     case 'zh':
       return AppLocalizationsZh();
   }

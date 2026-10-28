@@ -12346,4 +12346,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String compareFilesLabel(String original, String modified) {
     return '$original ↔ $modified';
   }
+
+  @override
+  String claudeProfileTitle(String project) {
+    return 'Which Claude for $project?';
+  }
+
+  @override
+  String get claudeProfileMenu => 'Claude profile…';
 }

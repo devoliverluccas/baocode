@@ -18,6 +18,7 @@ class LanguageSettingsPage extends StatelessWidget {
   static const nativeNames = {
     AppLocale.english: 'English',
     AppLocale.simplifiedChinese: '简体中文',
+    AppLocale.brazilianPortuguese: 'Português (Brasil)',
   };
 
   @override

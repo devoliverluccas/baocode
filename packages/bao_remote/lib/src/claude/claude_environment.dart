@@ -43,9 +43,82 @@ abstract final class ClaudeEnvironment {
 
   /// The state directory for the CLI to run with, from [environment]:
   /// pointed at one, it keeps its sessions there; else where it would.
-  static Map<String, String> stateDirectory(Map<String, String> environment) {
+  /// A session in [cwd] runs with the profile picked for it (see
+  /// [profileFor]) over either.
+  static Map<String, String> stateDirectory(
+    Map<String, String> environment, {
+    String? cwd,
+  }) {
+    if (cwd != null) {
+      if (profileFor(cwd) case final profile?) {
+        return {'CLAUDE_CONFIG_DIR': profile};
+      }
+    }
     final dir = environment[dataPathVariable];
     return dir == null || dir.isEmpty ? const {} : {'CLAUDE_CONFIG_DIR': dir};
+  }
+
+  /// Where the profile picked for each project is kept, as
+  /// `{folder: config dir}`: which Claude Code (`~/.claude-promov`,
+  /// `~/.claude-stark`, …) its sessions run with. Null: no profiles, every
+  /// project runs with [configDir].
+  static String? profilesFile;
+
+  /// The profile picked for each project folder.
+  static Map<String, String> profiles() {
+    final file = profilesFile;
+    if (file == null) return const {};
+    try {
+      return (jsonDecode(File(file).readAsStringSync()) as Map)
+          .cast<String, String>();
+    } on Object {
+      return const {};
+    }
+  }
+
+  /// The config dir picked for [cwd], or for the nearest folder above it
+  /// that has one; null when none was.
+  static String? profileFor(String cwd) {
+    final all = profiles();
+    if (all.isEmpty) return null;
+    String? dir = cwd;
+    while (dir != null) {
+      for (final MapEntry(:key, :value) in all.entries) {
+        if (p.equals(key, dir)) return value;
+      }
+      final parent = p.dirname(dir);
+      dir = parent == dir ? null : parent;
+    }
+    return null;
+  }
+
+  /// Has the sessions in [cwd] run with the config dir [profile].
+  static void setProfile(String cwd, String profile) {
+    final file = profilesFile;
+    if (file == null) return;
+    final all = {...profiles()}
+      ..removeWhere((key, _) => p.equals(key, cwd))
+      ..[cwd] = profile;
+    File(file)
+      ..createSync(recursive: true)
+      ..writeAsStringSync(const JsonEncoder.withIndent('  ').convert(all));
+  }
+
+  /// The profiles there are to pick: `~/.claude` and each `~/.claude-<name>`
+  /// folder.
+  static List<String> availableProfiles() {
+    final home = AppPaths.home(Platform.environment);
+    if (home.isEmpty) return const [];
+    try {
+      return [
+        for (final entry in Directory(home).listSync())
+          if (entry is Directory &&
+              RegExp(r'^\.claude(-[^.]+)?$').hasMatch(p.basename(entry.path)))
+            entry.path,
+      ]..sort();
+    } on FileSystemException {
+      return const [];
+    }
   }
 
   /// Replaces the environment looked up, e.g. with one set up under test.

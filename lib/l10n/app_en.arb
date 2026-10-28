@@ -8167,5 +8167,12 @@
   "@localHistoryLabel": {"placeholders": {"name": {"type": "String"}, "time": {"type": "String"}}},
   "explorerCompareSelected": "Compare Selected",
   "compareFilesLabel": "{original} \u2194 {modified}",
-  "@compareFilesLabel": {"placeholders": {"original": {"type": "String"}, "modified": {"type": "String"}}}
+  "@compareFilesLabel": {"placeholders": {"original": {"type": "String"}, "modified": {"type": "String"}}},
+  "claudeProfileTitle": "Which Claude for {project}?",
+  "@claudeProfileTitle": {
+    "placeholders": {
+      "project": {"type": "String"}
+    }
+  },
+  "claudeProfileMenu": "Claude profile…"
 }

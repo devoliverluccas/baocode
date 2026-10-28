@@ -36,6 +36,7 @@ import '../theme/codicons.dart';
 import '../theme/workbench_theme.dart' show themeColors;
 import '../update/update_service.dart';
 import '../workspace/chat_drag.dart';
+import '../workspace/claude_profile_dialog.dart';
 import '../workspace/editor_launcher.dart';
 import '../workspace/title_bar_double_click.dart';
 import '../workspace/window_controls.dart';
@@ -1597,6 +1598,14 @@ class _SidebarState extends State<Sidebar>
           l10n.workspaceOpenIn(editor.localizedPlatformLabel(l10n)),
           icon: editor.icon,
           onSelected: () => _openInEditor(project, editor),
+        ),
+      if (project.host == null)
+        SidebarMenuItem(
+          l10n.claudeProfileMenu,
+          icon: Icons.account_circle_outlined,
+          onSelected: () => unawaited(
+            pickClaudeProfile(context, project.path, change: true),
+          ),
         ),
       SidebarMenuItem(
         pinned ? l10n.sidebarUnpin : l10n.sidebarPin,

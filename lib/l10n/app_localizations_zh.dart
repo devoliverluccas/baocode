@@ -11686,4 +11686,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String compareFilesLabel(String original, String modified) {
     return '$original ↔ $modified';
   }
+
+  @override
+  String claudeProfileTitle(String project) {
+    return '$project 使用哪个 Claude？';
+  }
+
+  @override
+  String get claudeProfileMenu => 'Claude 配置…';
 }
