@@ -199,7 +199,7 @@ class TerminalInstance extends ChangeNotifier {
     this._config,
     this.environmentMutator,
     ValueListenable<TerminalColorTheme>? colorTheme,
-    this.warp = false,
+    this.warp,
   }) : _colorTheme = colorTheme ?? terminalColorTheme {
     _initPlatform();
     final options = vscodeTerminalOptions(
@@ -207,7 +207,7 @@ class TerminalInstance extends ChangeNotifier {
       rows: _rows,
       theme: _colorTheme.value,
     );
-    if (warp) warpTerminalStyle(options);
+    if (warp case final look?) warpTerminalStyle(options, look);
     xterm = TerminalXterm(options);
     _colorTheme.addListener(_updateTheme);
     CodeFont.families.addListener(_updateFont);
@@ -364,7 +364,7 @@ class TerminalInstance extends ChangeNotifier {
   final int id;
 
   /// Drawn as Warp draws its terminal (see [warpTerminalStyle]): an agent's.
-  final bool warp;
+  final WarpLook? warp;
 
   /// The folder it starts in, unless [cwd] or [config] says another.
   final String root;
@@ -454,7 +454,7 @@ class TerminalInstance extends ChangeNotifier {
   /// sequences set), clears the contrast cache and redraws.
   void _updateTheme() {
     final theme = vscodeTerminalTheme(_colorTheme.value);
-    xterm.options.theme = warp ? warpTerminalTheme(theme) : theme;
+    xterm.options.theme = warp == null ? theme : warpTerminalTheme(theme);
   }
 
   /// The code font's family (Settings -> Appearance) as the terminal's
@@ -462,7 +462,7 @@ class TerminalInstance extends ChangeNotifier {
   /// terminal has a widget context; changing the editor code size must not
   /// remeasure terminal cells.
   void _updateFont() {
-    if (!warp) xterm.options.fontFamily = vscodeTerminalFontFamily();
+    if (warp == null) xterm.options.fontFamily = vscodeTerminalFontFamily();
   }
 
   /// The find widget's theme listener, with `_updateFindColors`' new colors.

@@ -18,6 +18,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import 'terminal_colors.dart';
+import 'terminal_render_theme.dart' show WarpLook;
 import 'terminal_instance.dart';
 import 'terminal_profile_service.dart';
 import 'terminal_profiles.dart';
@@ -27,11 +28,11 @@ class TerminalService extends ChangeNotifier {
     required this.root,
     this.backend = const TerminalBackend(),
     this.colorTheme,
-    this.warp = false,
+    this.warp,
   });
 
   /// Its terminals drawn as Warp's (see [TerminalInstance.warp]).
-  final bool warp;
+  final WarpLook? warp;
 
   /// Where new terminals start: the project's folder.
   String root;

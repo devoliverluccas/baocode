@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../chat/widgets/pixel_loader.dart';
 import '../ide/terminal/terminal_instance.dart';
+import '../ide/terminal/terminal_render_theme.dart' show WarpLook;
 import '../ide/terminal/terminal_service.dart';
 import '../ide/terminal/terminal_view.dart';
 import '../kernel/claude_code/claude_environment.dart';
@@ -29,7 +32,10 @@ class AgentTerminals extends ChangeNotifier {
     final id = thread.id;
     if (id == null || _services.containsKey(id)) return;
     final cwd = thread.record?.cwd ?? thread.project.path;
-    final service = _services[id] = TerminalService(root: cwd, warp: true);
+    final service = _services[id] = TerminalService(
+      root: cwd,
+      warp: _warpLook(),
+    );
     unawaited(_start(service, id, cwd));
   }
 
@@ -83,6 +89,40 @@ class AgentTerminals extends ChangeNotifier {
     _services.clear();
     super.dispose();
   }
+}
+
+/// Warp's text as its settings.toml has it (`[appearance.text]`, its zoom),
+/// else as it starts.
+WarpLook _warpLook() {
+  const start = WarpLook();
+  final String text;
+  try {
+    text = File(
+      p.join(
+        Platform.environment['LOCALAPPDATA'] ?? '',
+        'warp',
+        'Warp',
+        'config',
+        'settings.toml',
+      ),
+    ).readAsStringSync();
+  } on FileSystemException {
+    return start;
+  }
+  String? value(String key) => RegExp(
+    '^$key'
+    r'\s*=\s*"?([^"\n]+?)"?\s*$',
+    multiLine: true,
+  ).firstMatch(text)?.group(1);
+  final zoom = (double.tryParse(value('zoom_level') ?? '') ?? 100) / 100;
+  return WarpLook(
+    fontFamily: value('font_name') ?? start.fontFamily,
+    fontSize:
+        (double.tryParse(value('font_size') ?? '') ?? start.fontSize) * zoom,
+    fontWeight: value('font_weight')?.toLowerCase() ?? start.fontWeight,
+    lineHeight:
+        double.tryParse(value('line_height_ratio') ?? '') ?? start.lineHeight,
+  );
 }
 
 /// An agent's pane as Claude Code's terminal: its title bar, then the
@@ -154,7 +194,7 @@ class _AgentTerminalPaneState extends State<AgentTerminalPane> {
         ),
         Expanded(
           child: ColoredBox(
-            color: Colors.black,
+            color: const Color(0xFF050505),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 0, 0),
               child: ListenableBuilder(

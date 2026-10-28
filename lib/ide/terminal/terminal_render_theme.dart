@@ -493,26 +493,51 @@ ITerminalOptions vscodeTerminalOptions({
   allowTransparency: false,
 );
 
-/// [options] as Warp draws its terminal (its defaults, Warp Dark): Hack at
-/// 13 with a line height of 1.2, a blinking bar cursor, white on black.
-void warpTerminalStyle(ITerminalOptions options) {
+/// How Warp draws its text, as its settings have it (see `WarpLook.read`).
+class WarpLook {
+  const WarpLook({
+    this.fontFamily = 'Hack',
+    this.fontSize = 13,
+    this.fontWeight = 'normal',
+    this.lineHeight = 1.2,
+  });
+
+  final String fontFamily;
+
+  /// In logical pixels: its size in points through its zoom.
+  final double fontSize;
+  final String fontWeight;
+  final double lineHeight;
+}
+
+/// [options] as Warp draws its terminal with [look], in its Dark theme:
+/// white on near black, its accent's cursor, colors never changed for
+/// contrast (Warp changes only the default colors', which already have it)
+/// and bold not brightened.
+void warpTerminalStyle(ITerminalOptions options, WarpLook look) {
   options
     ..fontFamily = [
-      'Hack',
+      look.fontFamily,
+      if (look.fontFamily != 'Hack') 'Hack',
       if (AppPlatform.isWindows) ...AppFonts.windowsFallbacks else 'monospace',
     ].map((f) => f.contains(' ') ? "'$f'" : f).join(', ')
-    ..lineHeight = 1.2
+    ..fontSize = look.fontSize
+    ..fontWeight = look.fontWeight
+    ..lineHeight = look.lineHeight
+    ..minimumContrastRatio = 1
+    ..drawBoldTextInBrightColors = false
     ..cursorStyle = 'bar'
     ..cursorBlink = true
     ..theme = warpTerminalTheme(options.theme);
 }
 
-/// Warp Dark's colors over [base]'s (its selection and scrollbar).
+/// Warp Dark's colors (its default_themes.rs) over [base]'s selection and
+/// scrollbar.
 ITheme warpTerminalTheme(ITheme? base) => (base ?? ITheme())
   ..foreground = '#ffffff'
-  ..background = '#000000'
-  ..cursor = '#00c2ff'
-  ..cursorAccent = '#000000'
+  ..background = '#050505'
+  ..cursor = '#19aad8'
+  ..cursorAccent = '#050505'
   ..black = '#616161'
   ..red = '#ff8272'
   ..green = '#b4fa72'

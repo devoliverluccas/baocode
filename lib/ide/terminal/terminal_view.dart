@@ -157,6 +157,8 @@ class _TerminalViewState extends State<TerminalView> with TextInputClient {
   }
 
   void _syncTerminalFontSize() {
+    // Warp's at its own size, as it draws it.
+    if (_instance.warp != null) return;
     final size = vscodeTerminalFontSize(
       MediaQuery.textScalerOf(context),
       SystemTextScale.maybeOf(context),

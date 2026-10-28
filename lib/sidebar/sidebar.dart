@@ -3744,7 +3744,12 @@ class StatusIndicator extends StatelessWidget {
       // A little under the list's text, as its dots are.
       ThreadStatus.running => const PixelLoader.agent(size: 12),
       ThreadStatus.needsInput => _Dot(needsInputColor),
-      ThreadStatus.unread => _Dot(AppColors.accent),
+      // Done and not seen yet: a check where its loader was.
+      ThreadStatus.unread => Icon(
+        Icons.check_circle_rounded,
+        size: 13,
+        color: AppColors.added,
+      ),
       ThreadStatus.idle => const SizedBox.shrink(),
     };
   }
