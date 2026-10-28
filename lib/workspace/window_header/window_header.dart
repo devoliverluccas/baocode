@@ -190,6 +190,7 @@ class _WindowHeaderState extends State<WindowHeader> {
   final _menus = GlobalKey(debugLabel: 'header menus');
   final _pin = GlobalKey(debugLabel: 'header pin');
   final _terminal = GlobalKey(debugLabel: 'header terminal');
+  final _view = GlobalKey(debugLabel: 'header view');
   final _sidePanel = GlobalKey(debugLabel: 'header side panel');
   final _open = GlobalKey(debugLabel: 'header open in editor');
   final _back = GlobalKey(debugLabel: 'header back to chat');
@@ -351,7 +352,8 @@ class _WindowHeaderState extends State<WindowHeader> {
       KeyedSubtree(key: _panel, child: IdeLayoutToggle.panel(layout)),
       KeyedSubtree(key: _chat, child: IdeLayoutToggle.chat(layout)),
     ],
-    if (widget.viewToggle case final toggle? when !ide) toggle,
+    if (widget.viewToggle case final toggle? when !ide)
+      KeyedSubtree(key: _view, child: toggle),
     // The chat's terminal and side panel where the IDE has its
     // panel and chat, the pin after them, and the way to the other
     // layout last: each where it was after a switch.
@@ -432,6 +434,7 @@ class _WindowHeaderState extends State<WindowHeader> {
         _panel,
         _chat,
         _terminal,
+        _view,
         _sidePanel,
         _pin,
         _open,
