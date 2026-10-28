@@ -27,7 +27,11 @@ class TerminalService extends ChangeNotifier {
     required this.root,
     this.backend = const TerminalBackend(),
     this.colorTheme,
+    this.warp = false,
   });
+
+  /// Its terminals drawn as Warp's (see [TerminalInstance.warp]).
+  final bool warp;
 
   /// Where new terminals start: the project's folder.
   String root;
@@ -131,6 +135,7 @@ class TerminalService extends ChangeNotifier {
       config: config,
       environmentMutator: environmentMutator,
       colorTheme: colorTheme,
+      warp: warp,
     )..onRequestClose = _closeRequested;
     _instances.add(instance);
     _onDidCreate.add(instance);

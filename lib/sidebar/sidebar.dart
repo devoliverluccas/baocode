@@ -49,7 +49,8 @@ import 'sidebar_times.dart';
 enum SidebarGrouping {
   project('Project', Icons.folder_outlined),
   time('Date', Icons.schedule_rounded),
-  status('Status', Icons.radio_button_checked_rounded);
+  status('Status', Icons.radio_button_checked_rounded),
+  active('Active', Icons.bolt_outlined);
 
   const SidebarGrouping(this.label, this.icon);
 
@@ -61,6 +62,7 @@ enum SidebarGrouping {
     project => l10n.sidebarGroupingProject,
     time => l10n.sidebarGroupingDate,
     status => l10n.sidebarGroupingStatus,
+    active => l10n.sidebarGroupingActive,
   };
 
   /// `By project`, as the list's heading says how it is grouped.
@@ -68,6 +70,7 @@ enum SidebarGrouping {
     project => l10n.sidebarByProject,
     time => l10n.sidebarByDate,
     status => l10n.sidebarByStatus,
+    active => l10n.sidebarGroupingActive,
   };
 }
 
@@ -94,6 +97,7 @@ class _Group {
     this.company,
     this.nested = false,
     this.archived = false,
+    this.inside = const [],
   });
 
   final String id;
@@ -112,6 +116,10 @@ class _Group {
 
   /// An archived project's: put back from its menu.
   final bool archived;
+
+  /// A company's header's: its projects' agents, not listed under it but
+  /// told of while it is folded (see [_GroupHeader._hiddenStatus]).
+  final List<AgentThread> inside;
 
   bool get pinned => id == _pinnedGroup;
 }
@@ -718,6 +726,14 @@ class _SidebarState extends State<Sidebar>
             where((t) => t.shownStatus == ThreadStatus.idle),
           ),
         ],
+        // What goes on now: working, waiting, finished unseen, or of today.
+        SidebarGrouping.active => [
+          _Group(
+            'active',
+            l10n.sidebarGroupingActive,
+            where((t) => t.shownStatus != ThreadStatus.idle || daysAgo(t) <= 0),
+          ),
+        ],
       },
       if (_showArchived)
         _Group(_archivedGroup, l10n.sidebarArchived, [
@@ -751,8 +767,18 @@ class _SidebarState extends State<Sidebar>
     final projects = _workspace.sidebarProjectsHere;
     final companies = Companies.instance;
     final archived = _workspace.archivedProjects;
-    _Group header(String id, String label, String company) =>
-        _Group('company:$id', label, const [], company: company);
+    _Group header(
+      String id,
+      String label,
+      String company, [
+      Iterable<Project> of = const [],
+    ]) => _Group(
+      'company:$id',
+      label,
+      const [],
+      company: company,
+      inside: where((thread) => of.contains(thread.project)),
+    );
     bool open(String id) => !_isCollapsed('company:$id');
     final none = [
       for (final project in projects)
@@ -763,15 +789,19 @@ class _SidebarState extends State<Sidebar>
         for (final project in projects) group(project)
       else ...[
         for (final company in companies.list) ...[
-          header(company.name, company.name, company.name),
+          header(company.name, company.name, company.name, [
+            for (final project in projects)
+              if (companies.of(project.path)?.name == company.name) project,
+          ]),
           if (open(company.name))
             for (final project in projects)
               if (companies.of(project.path)?.name == company.name)
                 group(project, nested: true),
         ],
         if (none.isNotEmpty) ...[
-          header('', l10n.companyNone, ''),
-          if (open('')) for (final project in none) group(project, nested: true),
+          header('', l10n.companyNone, '', none),
+          if (open(''))
+            for (final project in none) group(project, nested: true),
         ],
       ],
       if (archived.isNotEmpty) ...[
@@ -1343,13 +1373,41 @@ class _SidebarState extends State<Sidebar>
     );
   }
 
+  /// Opened from anywhere (a notification, the search, a shortcut), the
+  /// agent shown is shown here too: its company and project unfolded, its
+  /// row scrolled to.
+  void _unfoldTo(AgentThread thread) {
+    if (_grouping != SidebarGrouping.project ||
+        thread.archived ||
+        _workspace.isHidden(thread.project)) {
+      return;
+    }
+    final company = Companies.instance.of(thread.project.path)?.name ?? '';
+    final groups = [
+      if (Companies.instance.list.isNotEmpty) 'company:$company',
+      Workspace.projectGroup(thread.project.path),
+    ];
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (groups.any(_workspace.isCollapsed)) {
+        _workspace.setCollapsed(groups, false);
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _revealRow(thread);
+      });
+    });
+  }
+
   /// Anchors for the list and project icon popovers.
   final Map<Object, BuildContext> _slots = {};
   static const _listSlot = #list;
 
   Widget _buildList() {
     final switched = !identical(_listedCurrent, _current);
-    if (switched) _rowsDirty = true;
+    if (switched) {
+      _rowsDirty = true;
+      if (_current case final thread?) _unfoldTo(thread);
+    }
     if (_rowsDirty) {
       _listedCurrent = _current;
       final groups = [
@@ -1718,9 +1776,8 @@ class _SidebarState extends State<Sidebar>
         SidebarMenuItem(
           l10n.companyMove,
           icon: Icons.business_outlined,
-          onSelected: () => unawaited(
-            pickCompany(context, project.path, change: true),
-          ),
+          onSelected: () =>
+              unawaited(pickCompany(context, project.path, change: true)),
         ),
       SidebarMenuItem(
         pinned ? l10n.sidebarUnpin : l10n.sidebarPin,
@@ -2516,14 +2573,20 @@ class _GroupHeader extends StatelessWidget {
   }
 
   /// Folded, the dot of the agent in it that most needs attention: one
-  /// waiting on a question, else one finished unseen.
+  /// waiting on a question, else one working, else one finished unseen.
   Widget? _hiddenStatus(BuildContext context) {
     if (!collapsed) return null;
-    final statuses = {for (final thread in group.threads) thread.status};
+    final statuses = {
+      for (final thread in [...group.threads, ...group.inside]) thread.status,
+    };
     final (status, label) = switch (statuses) {
       _ when statuses.contains(ThreadStatus.needsInput) => (
         ThreadStatus.needsInput,
         context.l10n.sidebarNeedsInput,
+      ),
+      _ when statuses.contains(ThreadStatus.running) => (
+        ThreadStatus.running,
+        context.l10n.sidebarRunning,
       ),
       _ when statuses.contains(ThreadStatus.unread) => (
         ThreadStatus.unread,
@@ -3272,24 +3335,26 @@ class _ThreadRow extends StatelessWidget {
 
   Widget _buildTitle(AppLocalizations l10n, Color foreground) {
     final status = thread.status;
+    final place = showProject ? placeOf(thread.project) : null;
+    final faint = TextStyle(
+      color: selected ? foreground : AppColors.textFaint,
+      fontSize: 11.5,
+      fontWeight: FontWeight.normal,
+    );
     return Text.rich(
       TextSpan(
         children: [
+          // In a company, its place first: a long title cuts the end, not
+          // where it is.
+          if (place != null) TextSpan(text: '$place  ', style: faint),
           TextSpan(text: thread.localizedTitle(l10n)),
-          if (showProject) ...[
+          if (showProject && place == null) ...[
             const TextSpan(text: '  '),
             if (projectIcon case final icon?) ...[
               WidgetSpan(alignment: PlaceholderAlignment.middle, child: icon),
               const TextSpan(text: ' '),
             ],
-            TextSpan(
-              text: thread.project.name,
-              style: TextStyle(
-                color: selected ? foreground : AppColors.textFaint,
-                fontSize: 11.5,
-                fontWeight: FontWeight.normal,
-              ),
-            ),
+            TextSpan(text: thread.project.name, style: faint),
           ],
         ],
       ),

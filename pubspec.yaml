@@ -135,6 +135,17 @@ flutter:
     - family: codicon
       fonts:
         - asset: assets/codicons/codicon.ttf
+    # Warp's terminal font, for an agent's terminal (see warpTerminalStyle).
+    - family: Hack
+      fonts:
+        - asset: assets/fonts/hack/Hack-Regular.ttf
+        - asset: assets/fonts/hack/Hack-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/hack/Hack-Italic.ttf
+          style: italic
+        - asset: assets/fonts/hack/Hack-BoldItalic.ttf
+          weight: 700
+          style: italic
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

@@ -199,15 +199,16 @@ class TerminalInstance extends ChangeNotifier {
     this._config,
     this.environmentMutator,
     ValueListenable<TerminalColorTheme>? colorTheme,
+    this.warp = false,
   }) : _colorTheme = colorTheme ?? terminalColorTheme {
     _initPlatform();
-    xterm = TerminalXterm(
-      vscodeTerminalOptions(
-        cols: _columns,
-        rows: _rows,
-        theme: _colorTheme.value,
-      ),
+    final options = vscodeTerminalOptions(
+      cols: _columns,
+      rows: _rows,
+      theme: _colorTheme.value,
     );
+    if (warp) warpTerminalStyle(options);
+    xterm = TerminalXterm(options);
     _colorTheme.addListener(_updateTheme);
     CodeFont.families.addListener(_updateFont);
     source = TerminalCoreSource(terminal, decorationService: decorations);
@@ -362,6 +363,9 @@ class TerminalInstance extends ChangeNotifier {
   /// Its number, from 1 up, as VS Code's `instanceId`.
   final int id;
 
+  /// Drawn as Warp draws its terminal (see [warpTerminalStyle]): an agent's.
+  final bool warp;
+
   /// The folder it starts in, unless [cwd] or [config] says another.
   final String root;
 
@@ -449,7 +453,8 @@ class TerminalInstance extends ChangeNotifier {
   /// option, which replaces the terminal's colors (and those escape
   /// sequences set), clears the contrast cache and redraws.
   void _updateTheme() {
-    xterm.options.theme = vscodeTerminalTheme(_colorTheme.value);
+    final theme = vscodeTerminalTheme(_colorTheme.value);
+    xterm.options.theme = warp ? warpTerminalTheme(theme) : theme;
   }
 
   /// The code font's family (Settings -> Appearance) as the terminal's
@@ -457,7 +462,7 @@ class TerminalInstance extends ChangeNotifier {
   /// terminal has a widget context; changing the editor code size must not
   /// remeasure terminal cells.
   void _updateFont() {
-    xterm.options.fontFamily = vscodeTerminalFontFamily();
+    if (!warp) xterm.options.fontFamily = vscodeTerminalFontFamily();
   }
 
   /// The find widget's theme listener, with `_updateFindColors`' new colors.

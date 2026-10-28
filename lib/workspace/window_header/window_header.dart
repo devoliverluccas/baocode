@@ -53,6 +53,7 @@ class WindowHeader extends StatefulWidget {
     required this.onToggleContextPanel,
     this.terminalShown = false,
     this.onToggleTerminal,
+    this.viewToggle,
     this.sidePanelShown = false,
     this.onToggleSidePanel,
     this.onOpenSettings,
@@ -143,6 +144,9 @@ class WindowHeader extends StatefulWidget {
   /// Terminal); with none, neither is offered.
   final bool terminalShown;
   final VoidCallback? onToggleTerminal;
+
+  /// The agent's chat / terminal switch, before the others.
+  final Widget? viewToggle;
 
   /// Over the chat, the side panel at the right of the conversations:
   /// whether it shows, and its toggle (the button by the terminal's, and
@@ -347,6 +351,7 @@ class _WindowHeaderState extends State<WindowHeader> {
       KeyedSubtree(key: _panel, child: IdeLayoutToggle.panel(layout)),
       KeyedSubtree(key: _chat, child: IdeLayoutToggle.chat(layout)),
     ],
+    if (widget.viewToggle case final toggle? when !ide) toggle,
     // The chat's terminal and side panel where the IDE has its
     // panel and chat, the pin after them, and the way to the other
     // layout last: each where it was after a switch.

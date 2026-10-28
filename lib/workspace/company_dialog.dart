@@ -4,9 +4,24 @@ import 'package:path/path.dart' as p;
 import '../kernel/claude_code/claude_environment.dart';
 import '../l10n/l10n.dart';
 import 'companies.dart';
+import 'workspace.dart' show Project;
 
 /// A profile as it is shown: its folder's name, `claude-promov`.
 String profileLabel(String profile) => p.basename(profile).substring(1);
+
+/// Where [project] is, as shown: `LUNAR › hub-lunar`; null when it is in
+/// no company.
+String? placeOf(Project project) =>
+    switch (Companies.instance.of(project.path)) {
+      final company? => '${company.name} › ${project.name}',
+      null => null,
+    };
+
+/// [title] after where [project] is, if it is in a company.
+String withPlace(Project project, String title) => switch (placeOf(project)) {
+  final place? => '$place  ·  $title',
+  null => title,
+};
 
 /// Asks which company [path] is in, a new one if need be, and puts it there
 /// (to run with its Claude). Asked only when it is in none yet, unless

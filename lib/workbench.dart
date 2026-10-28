@@ -135,6 +135,7 @@ import 'workspace/chat_branch_bar.dart';
 import 'workspace/chat_quota_bar.dart';
 import 'workspace/chat_drag.dart';
 import 'workspace/chat_grid_view.dart';
+import 'workspace/agent_terminal.dart';
 import 'workspace/chat_terminal.dart';
 import 'workspace/editor_launcher.dart' show openExternal;
 import 'workspace/ssh_server_edit.dart';
@@ -845,6 +846,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     }
     widget.settings?.files?.changes.removeListener(_settingsFilesChanged);
     _notifications.dispose();
+    _agentTerminals?.dispose();
     for (final index in _fileIndexes.values) {
       index.dispose();
     }
@@ -3231,8 +3233,18 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       autoSave: _autoSaveOn,
       compact: _narrow,
       settingsShown: _settingsOpen,
+      viewToggle: switch (agent ?? _workspace.current) {
+        final thread? when !ide => _viewToggle(thread),
+        _ => null,
+      },
       title: _titleInHeader
-          ? (agent ?? _workspace.current)?.localizedTitle(context.l10n)
+          ? switch (agent ?? _workspace.current) {
+              final thread? => withPlace(
+                thread.project,
+                thread.localizedTitle(context.l10n),
+              ),
+              null => null,
+            }
           : null,
     );
   }
@@ -4324,6 +4336,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         if (windowTools) const SizedBox(width: 8),
       ],
       if (paneTools) ...[
+        ?_viewToggle(thread),
         // The panel is under each conversation (see [_withTerminal]), so
         // the button in a pane is that pane's project's.
         if (showsTerminals && terminals != null)
@@ -4364,6 +4377,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         embedded: embedded,
         session: thread.session,
         title: thread.localizedTitle(context.l10n),
+        place: placeOf(thread.project),
         autofocus: thread.session.itemCount == 0,
         onRename: (title) => _workspace.rename(thread, title),
         // Beside the sidebar, the traffic lights are over it, not here.
@@ -4414,8 +4428,54 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         openEditor: openEditor ?? () => _sidePanelEditor(thread),
       ),
     );
-    if (place.alone || embedded) return chat;
-    return _paneRail(thread, chat);
+    final shown = switch (_agentTerminals) {
+      final terminals? when !embedded && _workspace.inTerminal(thread) =>
+        AgentTerminalPane(
+          terminals: terminals,
+          thread: thread,
+          title: withPlace(thread.project, thread.localizedTitle(context.l10n)),
+          leading: leading,
+          inset: titleBarInset,
+          trailing: tools.isEmpty
+              ? null
+              : KeepPaneFocus(
+                  child: Row(mainAxisSize: MainAxisSize.min, children: tools),
+                ),
+        ),
+      _ => chat,
+    };
+    if (place.alone || embedded) return shown;
+    return _paneRail(thread, shown);
+  }
+
+  /// The agents shown as Claude Code's terminal; none where terminals
+  /// cannot run.
+  late final AgentTerminals? _agentTerminals =
+      widget.terminalBackend?.supported ?? false ? AgentTerminals() : null;
+
+  /// [thread]'s switch between its chat and Claude Code's terminal; none
+  /// where it cannot go there.
+  Widget? _viewToggle(AgentThread thread) {
+    if (_agentTerminals == null) return null;
+    final terminal = _workspace.inTerminal(thread);
+    if (!terminal && !_workspace.canUseTerminal(thread)) return null;
+    final l10n = context.l10n;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: SidebarIconButton(
+        icon: terminal ? Codicons.commentDiscussion : Codicons.terminal,
+        tooltip: terminal ? l10n.agentShowChat : l10n.agentShowTerminal,
+        size: 22,
+        onTap: () => unawaited(_switchView(thread, !terminal)),
+      ),
+    );
+  }
+
+  Future<void> _switchView(AgentThread thread, bool terminal) async {
+    final id = thread.id;
+    if (id == null) return;
+    if (!terminal) await _agentTerminals?.stop(id);
+    await _workspace.setTerminal(thread, terminal);
   }
 
   /// [chat], a pane among others, with the side panel's rail over its top

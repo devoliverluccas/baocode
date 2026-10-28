@@ -3347,5 +3347,8 @@
   "companyMove": "Mover para empresa…",
   "companyDelete": "Excluir empresa",
   "projectsArchived": "Projetos arquivados",
-  "projectUnarchive": "Desarquivar"
+  "projectUnarchive": "Desarquivar",
+  "sidebarGroupingActive": "Ativas",
+  "agentShowTerminal": "Ver como terminal",
+  "agentShowChat": "Ver como chat"
 }

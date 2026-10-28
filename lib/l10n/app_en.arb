@@ -8182,5 +8182,8 @@
     "placeholders": {
       "project": {"type": "String"}
     }
-  }
+  },
+  "sidebarGroupingActive": "Active",
+  "agentShowTerminal": "Show as terminal",
+  "agentShowChat": "Show as chat"
 }

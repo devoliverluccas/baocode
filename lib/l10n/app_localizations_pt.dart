@@ -12474,4 +12474,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get projectUnarchive => 'Desarquivar';
+
+  @override
+  String get sidebarGroupingActive => 'Ativas';
+
+  @override
+  String get agentShowTerminal => 'Ver como terminal';
+
+  @override
+  String get agentShowChat => 'Ver como chat';
 }

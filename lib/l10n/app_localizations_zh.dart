@@ -11718,4 +11718,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get projectUnarchive => 'Unarchive';
+
+  @override
+  String get sidebarGroupingActive => 'Active';
+
+  @override
+  String get agentShowTerminal => 'Show as terminal';
+
+  @override
+  String get agentShowChat => 'Show as chat';
 }

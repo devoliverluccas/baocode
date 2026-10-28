@@ -492,3 +492,40 @@ ITerminalOptions vscodeTerminalOptions({
   rescaleOverlappingGlyphs: true,
   allowTransparency: false,
 );
+
+/// [options] as Warp draws its terminal (its defaults, Warp Dark): Hack at
+/// 13 with a line height of 1.2, a blinking bar cursor, white on black.
+void warpTerminalStyle(ITerminalOptions options) {
+  options
+    ..fontFamily = [
+      'Hack',
+      if (AppPlatform.isWindows) ...AppFonts.windowsFallbacks else 'monospace',
+    ].map((f) => f.contains(' ') ? "'$f'" : f).join(', ')
+    ..lineHeight = 1.2
+    ..cursorStyle = 'bar'
+    ..cursorBlink = true
+    ..theme = warpTerminalTheme(options.theme);
+}
+
+/// Warp Dark's colors over [base]'s (its selection and scrollbar).
+ITheme warpTerminalTheme(ITheme? base) => (base ?? ITheme())
+  ..foreground = '#ffffff'
+  ..background = '#000000'
+  ..cursor = '#00c2ff'
+  ..cursorAccent = '#000000'
+  ..black = '#616161'
+  ..red = '#ff8272'
+  ..green = '#b4fa72'
+  ..yellow = '#fefdc2'
+  ..blue = '#a5d5fe'
+  ..magenta = '#ff8ffd'
+  ..cyan = '#d0d1fe'
+  ..white = '#f1f1f1'
+  ..brightBlack = '#8e8e8e'
+  ..brightRed = '#ffc4bd'
+  ..brightGreen = '#d6fcb9'
+  ..brightYellow = '#fefdd5'
+  ..brightBlue = '#c1e3fe'
+  ..brightMagenta = '#ffb1fe'
+  ..brightCyan = '#e5e6fe'
+  ..brightWhite = '#feffff';

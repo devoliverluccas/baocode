@@ -486,7 +486,7 @@ void main() {
     final first = workspace.selected.session;
     await tester.pump();
     expect(first.modes!.selected.id, 'agent');
-    expect(first.permissions!.selected.id, 'default');
+    expect(first.permissions!.selected.id, 'bypassPermissions');
     first.modes!.onSelected(
       first.modes!.options.firstWhere((mode) => mode.id == 'ask'),
     );

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:bao_remote/client.dart' show SshServer;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/services.dart' show TextSelection;
 import 'package:path/path.dart' as p;
 
@@ -108,11 +109,12 @@ class AgentThread {
   /// renamed.
   Project project;
 
-  /// The kept session it continues, if any.
-  final SessionRecord? record;
+  /// The kept session it continues, if any: one of this run once it has
+  /// gone to the terminal (see [Workspace.setTerminal]).
+  SessionRecord? record;
 
   final KernelDescriptor _kernel;
-  final ChatSession Function() _open;
+  ChatSession Function() _open;
   ChatSession? _session;
   void Function(AgentThread thread)? _onOpened;
 
@@ -546,20 +548,90 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
         updatedAt: session.updatedAt,
         pinned: _pinned.contains(id),
         archived: _archived.contains(id),
-        open: () => ChatSession(
-          kernel: kernel,
-          kernels: kernels,
-          kernelContext: KernelContext(
-            cwd: session.cwd,
-            resume: session,
-            // As it was left, or as a new agent starts.
-            settings: {..._preferredSettings, ...?_agentSettings[session.id]},
-            workspace: () => _kernelWorkspace(session.cwd),
-          ),
-          historyCount: 0,
-        ),
+        open: _resumer(kernel, session),
       ),
     );
+  }
+
+  /// Opens [session] to go on with it, its history read from where it is
+  /// kept.
+  ChatSession Function() _resumer(
+    KernelDescriptor kernel,
+    SessionRecord session,
+  ) =>
+      () => ChatSession(
+        kernel: kernel,
+        kernels: kernels,
+        kernelContext: KernelContext(
+          cwd: session.cwd,
+          resume: session,
+          // As it was left, or as a new agent starts.
+          settings: {..._preferredSettings, ...?_agentSettings[session.id]},
+          workspace: () => _kernelWorkspace(session.cwd),
+        ),
+        historyCount: 0,
+      );
+
+  // --- Terminal view ---------------------------------------------------------
+
+  /// The sessions shown as Claude Code's own terminal, not as a chat.
+  final Set<String> _terminalView = {};
+
+  /// Whether [thread] shows as Claude Code's terminal.
+  bool inTerminal(AgentThread thread) =>
+      thread.id != null && _terminalView.contains(thread.id);
+
+  /// Whether [thread] can go to the terminal: a session of this machine's
+  /// Claude Code, kept already, not working.
+  bool canUseTerminal(AgentThread thread) =>
+      thread.id != null &&
+      thread.project.host == null &&
+      thread._kernel.catalog != null &&
+      thread.status != ThreadStatus.running;
+
+  /// [thread] to the terminal, or back. To it, its session is closed (its
+  /// process stopped: one process writes a session at a time); back, it is
+  /// read again from where it is kept, with what the terminal added.
+  Future<void> setTerminal(AgentThread thread, bool on) async {
+    final id = thread.id;
+    if (id == null || on == _terminalView.contains(id)) return;
+    if (thread.record?.id != id) {
+      final kept = await thread._kernel.catalog?.sessionsIn(
+        thread.project.path,
+      );
+      final record = kept?.where((s) => s.id == id).firstOrNull;
+      if (record == null) return;
+      thread
+        ..record = record
+        .._open = _resumer(thread._kernel, record);
+    }
+    if (on) {
+      _terminalView.add(id);
+    } else {
+      _terminalView.remove(id);
+      // Read again as the terminal left it, before the chat shows.
+      _close(thread);
+    }
+    _save();
+    notifyListeners();
+    // Its chat gone from the screen first, then its session let go.
+    if (on) {
+      await SchedulerBinding.instance.endOfFrame;
+      if (inTerminal(thread)) _close(thread);
+    }
+  }
+
+  /// [thread]'s session stopped and let go, to be opened again on next use.
+  void _close(AgentThread thread) {
+    final session = thread._session;
+    if (session == null) return;
+    if (_listeners.remove(thread) case final listener?) {
+      session.removeListener(listener);
+    }
+    thread._session = null;
+    session
+      ..stop()
+      ..dispose();
   }
 
   // --- Mock ------------------------------------------------------------------
@@ -2301,6 +2373,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
         _sidebarGrouping = grouping;
       }
       _collapsedGroups.addAll(list('collapsed'));
+      _terminalView.addAll(list('terminalView'));
       _showArchived = sidebar['showArchived'] == true;
       _pinned.addAll(list('pinned'));
       _archived.addAll(list('archived'));
@@ -2412,6 +2485,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       'sidebar': {
         'grouping': ?_sidebarGrouping,
         'collapsed': [..._collapsedGroups],
+        'terminalView': [..._terminalView],
         'showArchived': _showArchived,
         'pinned': [..._pinned],
         'archived': [..._archived],

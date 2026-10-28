@@ -63,6 +63,7 @@ class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
     this.title = 'Optimize virtual list scrolling',
+    this.place,
     this.session,
     this.leading,
     this.trailing,
@@ -89,6 +90,9 @@ class ChatScreen extends StatefulWidget {
   });
 
   final String title;
+
+  /// Where the agent works, before [title]: `LUNAR › hub-lunar`.
+  final String? place;
   final ChatSession? session;
 
   /// Before the title, e.g. a button to show the sidebar.
@@ -516,8 +520,17 @@ class _ChatScreenState extends State<ChatScreen>
         onDoubleTap: onRename == null
             ? null
             : () => setState(() => _renaming = true),
-        child: Text(
-          widget.title,
+        child: Text.rich(
+          TextSpan(
+            children: [
+              if (widget.place case final place?)
+                TextSpan(
+                  text: '$place  ·  ',
+                  style: style.copyWith(color: AppColors.textFaint),
+                ),
+              TextSpan(text: widget.title),
+            ],
+          ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: style,

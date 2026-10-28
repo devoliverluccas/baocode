@@ -20194,6 +20194,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unarchive'**
   String get projectUnarchive;
+
+  /// No description provided for @sidebarGroupingActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get sidebarGroupingActive;
+
+  /// No description provided for @agentShowTerminal.
+  ///
+  /// In en, this message translates to:
+  /// **'Show as terminal'**
+  String get agentShowTerminal;
+
+  /// No description provided for @agentShowChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Show as chat'**
+  String get agentShowChat;
 }
 
 class _AppLocalizationsDelegate
