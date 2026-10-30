@@ -8190,5 +8190,12 @@
   "companyIcon": "Icon",
   "companyHide": "Hide company",
   "companyShow": "Show company",
-  "companiesHidden": "Hidden companies"
+  "companiesHidden": "Hidden companies",
+  "sidebarActivate": "Activate",
+  "sidebarDeactivate": "Deactivate",
+  "sidebarActivateCount": "Activate {count} Agents",
+  "sidebarDeactivateCount": "Deactivate {count} Agents",
+  "sidebarDeactivateAll": "Deactivate All",
+  "@sidebarActivateCount": {"placeholders": {"count": {"type": "int"}}},
+  "@sidebarDeactivateCount": {"placeholders": {"count": {"type": "int"}}}
 }

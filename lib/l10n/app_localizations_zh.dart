@@ -11742,4 +11742,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get companiesHidden => 'Hidden companies';
+
+  @override
+  String get sidebarActivate => 'Activate';
+
+  @override
+  String get sidebarDeactivate => 'Deactivate';
+
+  @override
+  String sidebarActivateCount(int count) {
+    return 'Activate $count Agents';
+  }
+
+  @override
+  String sidebarDeactivateCount(int count) {
+    return 'Deactivate $count Agents';
+  }
+
+  @override
+  String get sidebarDeactivateAll => 'Deactivate All';
 }

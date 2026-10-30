@@ -101,6 +101,7 @@ class AgentThread {
     this._title = '',
     this.pinned = false,
     this.archived = false,
+    this.active = false,
     bool unread = false,
   }) : _seenSeq = unread ? -1 : 0,
        _wantsTitle = record == null && _title.isEmpty;
@@ -160,6 +161,10 @@ class AgentThread {
   DateTime updatedAt;
   bool pinned;
   bool archived;
+
+  /// Listed as active until the user says otherwise: from when it is sent
+  /// something, whatever the day (see [Workspace.setActive]).
+  bool active;
 
   /// The last turn end the user has seen (see [ChatSession.lastTurnEndSeq]).
   int _seenSeq;
@@ -537,6 +542,10 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
         when session.updatedAt.isAfter(since)) {
       _unhide(project.path);
     }
+    if (_activeFrom case final from? when session.updatedAt.isAfter(from)) {
+      _active.add(id);
+      _save();
+    }
     _add(
       AgentThread._(
         project: project,
@@ -548,6 +557,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
         updatedAt: session.updatedAt,
         pinned: _pinned.contains(id),
         archived: _archived.contains(id),
+        active: _active.contains(id),
         open: _resumer(kernel, session),
       ),
     );
@@ -607,6 +617,8 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     }
     if (on) {
       _terminalView.add(id);
+      // What is sent there is not seen here.
+      _setActive(thread, true, save: false);
     } else {
       _terminalView.remove(id);
       // Read again as the terminal left it, before the chat shows.
@@ -1254,6 +1266,13 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   /// archived. Claude Code keeps neither.
   final Set<String> _pinned = {}, _archived = {};
 
+  /// Sessions listed as active, by id (see [AgentThread.active]).
+  final Set<String> _active = {};
+
+  /// Sessions since this are active: the two last days', the first run
+  /// that keeps [_active], for what went on not to start over.
+  DateTime? _activeFrom;
+
   void _setPinnedIds(Iterable<String> ids) {
     final ordered = {...ids};
     _pinned
@@ -1651,6 +1670,19 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     }
     if (!changed) return;
     if (archived) _leaveMany(selected);
+    _save();
+    notifyListeners();
+  }
+
+  /// Makes [threads] active or not, saving and notifying once. No longer
+  /// active, what they finished is taken as seen: it would keep them
+  /// listed.
+  void setActive(Iterable<AgentThread> threads, bool active) {
+    var changed = false;
+    for (final thread in {...threads}) {
+      changed = _setActive(thread, active, save: false) || changed;
+    }
+    if (!changed) return;
     _save();
     notifyListeners();
   }
@@ -2123,10 +2155,12 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       for (final thread in _threads)
         if (thread.record case final record?) record.id: record.title,
     };
-    final count = _pinned.length + _archived.length + _folders.length;
+    final count =
+        _pinned.length + _archived.length + _active.length + _folders.length;
     final names = _names.length;
     _pinned.retainAll(titles.keys);
     _archived.retainAll(titles.keys);
+    _active.retainAll(titles.keys);
     // A name the catalog lists is the CLI's now.
     _names.removeWhere((id, name) => titles[id] == null || titles[id] == name);
     _folders.removeWhere(listed.contains);
@@ -2173,7 +2207,8 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     _ideChatShown.removeWhere(
       (_, tab) => tab is String && !titles.containsKey(tab),
     );
-    if (_pinned.length + _archived.length + _folders.length != count ||
+    if (_pinned.length + _archived.length + _active.length + _folders.length !=
+            count ||
         _names.length != names ||
         size() != before) {
       _save();
@@ -2389,6 +2424,11 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       }
       _pinned.addAll(list('pinned'));
       _archived.addAll(list('archived'));
+      _active.addAll(list('active'));
+      if (sidebar['active'] == null) {
+        final now = DateTime.now();
+        _activeFrom = DateTime(now.year, now.month, now.day - 1);
+      }
       _names.addAll(strings(sidebar['names']));
       _folders.addAll(list('folders'));
       _expandedGroups.addAll(list('expanded'));
@@ -2502,6 +2542,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
         'width': ?_sidebarWidth,
         'pinned': [..._pinned],
         'archived': [..._archived],
+        'active': [..._active],
         'names': {..._names},
         'folders': [..._folders],
         'expanded': [..._expandedGroups],
@@ -2662,10 +2703,15 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     // What ends in view is seen, while the window is in front.
     if (_windowActive && isShown(thread)) thread._markSeen();
     // Pinned or archived before its first message gave it an id.
-    if (thread.pinned || thread.archived) _keepMarks(thread);
+    if (thread.pinned || thread.archived || thread.active) _keepMarks(thread);
     final before = _snapshots[thread];
     final snapshot = thread._snapshot;
     if (snapshot == before) return;
+    // Sent something: active, until the user says otherwise.
+    if (snapshot.status == ThreadStatus.running &&
+        before?.status != ThreadStatus.running) {
+      _setActive(thread, true);
+    }
     var changed = _keepChoices(thread, snapshot);
     if (before != null) {
       // Picked for this agent: the next new one starts with it too.
@@ -3185,8 +3231,16 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     return changed || kept;
   }
 
-  /// Keeps whether [thread] is pinned and archived for the next run, once
-  /// its session has an id (see [_sync] for a new agent's).
+  bool _setActive(AgentThread thread, bool active, {bool save = true}) {
+    final changed = thread.active != active;
+    thread.active = active;
+    if (!active) thread._markSeen();
+    final kept = _keepMarks(thread, save: save);
+    return changed || kept;
+  }
+
+  /// Keeps whether [thread] is pinned, archived and active for the next
+  /// run, once its session has an id (see [_sync] for a new agent's).
   bool _keepMarks(AgentThread thread, {bool save = true}) {
     final id = thread._id;
     if (id == null) return false;
@@ -3194,10 +3248,11 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     // Both, not only the first that changed.
     final pinned = mark(_pinned, thread.pinned);
     final archived = mark(_archived, thread.archived);
+    final active = mark(_active, thread.active);
     // Pinned last, it is on top (see [inPinnedOrder]).
     if (pinned && thread.pinned) _setPinnedIds([id, ..._pinned]);
-    if (save && (pinned || archived)) _save();
-    return pinned || archived;
+    if (save && (pinned || archived || active)) _save();
+    return pinned || archived || active;
   }
 
   /// Deletes [thread]: stops its agent, and once it has stopped, deletes
@@ -3215,7 +3270,11 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       _removed.add(id);
       _forgetDraft(id);
       resumes.remove(id);
-      final kept = [_pinned.remove(id), _archived.remove(id)];
+      final kept = [
+        _pinned.remove(id),
+        _archived.remove(id),
+        _active.remove(id),
+      ];
       final named = _names.remove(id) != null;
       if (save && (named || kept.contains(true))) _save();
     }

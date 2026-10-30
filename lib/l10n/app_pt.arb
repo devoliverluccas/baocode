@@ -3355,5 +3355,10 @@
   "companyIcon": "Ícone",
   "companyHide": "Ocultar empresa",
   "companyShow": "Mostrar empresa",
-  "companiesHidden": "Empresas ocultas"
+  "companiesHidden": "Empresas ocultas",
+  "sidebarActivate": "Ativar",
+  "sidebarDeactivate": "Desativar",
+  "sidebarActivateCount": "Ativar {count} Agentes",
+  "sidebarDeactivateCount": "Desativar {count} Agentes",
+  "sidebarDeactivateAll": "Desativar Tudo"
 }

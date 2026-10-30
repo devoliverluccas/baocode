@@ -12498,4 +12498,23 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get companiesHidden => 'Empresas ocultas';
+
+  @override
+  String get sidebarActivate => 'Ativar';
+
+  @override
+  String get sidebarDeactivate => 'Desativar';
+
+  @override
+  String sidebarActivateCount(int count) {
+    return 'Ativar $count Agentes';
+  }
+
+  @override
+  String sidebarDeactivateCount(int count) {
+    return 'Desativar $count Agentes';
+  }
+
+  @override
+  String get sidebarDeactivateAll => 'Desativar Tudo';
 }

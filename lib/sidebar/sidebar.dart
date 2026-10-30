@@ -733,14 +733,12 @@ class _SidebarState extends State<Sidebar>
             where((t) => t.shownStatus == ThreadStatus.idle),
           ),
         ],
-        // What goes on now: working, waiting, finished unseen, or of today.
-        // What goes on now (working, waiting, finished unseen, or of
-        // today), under its company and project as by project.
+        // What the user keeps active, and what goes on now (working,
+        // waiting, finished unseen), under its company and project as by
+        // project.
         SidebarGrouping.active => _projectGroups(
           (test) => where(
-            (t) =>
-                test(t) &&
-                (t.shownStatus != ThreadStatus.idle || daysAgo(t) <= 0),
+            (t) => test(t) && (t.active || t.shownStatus != ThreadStatus.idle),
           ),
           onlyActive: true,
         ),
@@ -859,6 +857,16 @@ class _SidebarState extends State<Sidebar>
         l10n.companyEdit,
         icon: Icons.edit_outlined,
         onSelected: () => unawaited(editCompany(context, editing: company)),
+      ),
+      SidebarMenuItem(
+        l10n.sidebarDeactivateAll,
+        icon: Icons.bolt_outlined,
+        onSelected: () => _workspace.setActive(
+          _workspace.threads.where(
+            (t) => Companies.instance.of(t.project.path)?.name == name,
+          ),
+          false,
+        ),
       ),
       SidebarMenuItem(
         company.hidden ? l10n.companyShow : l10n.companyHide,
@@ -1765,6 +1773,7 @@ class _SidebarState extends State<Sidebar>
       onPinAll: (threads, pinned) => _workspace.setPinnedAll(threads, pinned),
       onArchiveAll: (threads, archived) =>
           _workspace.setArchivedAll(threads, archived),
+      onActiveAll: (threads, active) => _workspace.setActive(threads, active),
       onDeleteAll: (threads) => unawaited(_confirmDelete(threads)),
       dragThreads: () => _targetsFor(thread),
       drag: widget.drag,
@@ -1872,6 +1881,14 @@ class _SidebarState extends State<Sidebar>
           icon: Icons.schedule_rounded,
           onSelected: () => _workspace.sortByTime(project),
         ),
+      SidebarMenuItem(
+        l10n.sidebarDeactivateAll,
+        icon: Icons.bolt_outlined,
+        onSelected: () => _workspace.setActive(
+          _workspace.threads.where((t) => t.project == project),
+          false,
+        ),
+      ),
       SidebarMenuItem(
         l10n.sidebarArchiveAll,
         icon: Icons.inventory_2_outlined,
@@ -3129,6 +3146,7 @@ class _ThreadRow extends StatelessWidget {
     required this.onContextMenu,
     required this.onPinAll,
     required this.onArchiveAll,
+    required this.onActiveAll,
     required this.onDeleteAll,
     required this.dragThreads,
   });
@@ -3177,6 +3195,7 @@ class _ThreadRow extends StatelessWidget {
   final VoidCallback onContextMenu;
   final void Function(List<AgentThread>, bool) onPinAll;
   final void Function(List<AgentThread>, bool) onArchiveAll;
+  final void Function(List<AgentThread>, bool) onActiveAll;
   final ValueChanged<List<AgentThread>> onDeleteAll;
   final List<AgentThread> Function() dragThreads;
 
@@ -3184,6 +3203,7 @@ class _ThreadRow extends StatelessWidget {
     final targets = menuTargets();
     final pinned = targets.every((thread) => thread.pinned);
     final archived = targets.every((thread) => thread.archived);
+    final active = targets.every((thread) => thread.active);
     final count = targets.length;
     // Several: only what is done to them all, saying how many.
     if (count > 1) {
@@ -3196,6 +3216,13 @@ class _ThreadRow extends StatelessWidget {
             icon: pinned ? Icons.push_pin : Icons.push_pin_outlined,
             onSelected: () => onPinAll(targets, !pinned),
           ),
+        SidebarMenuItem(
+          active
+              ? l10n.sidebarDeactivateCount(count)
+              : l10n.sidebarActivateCount(count),
+          icon: Icons.bolt_outlined,
+          onSelected: () => onActiveAll(targets, !active),
+        ),
         SidebarMenuItem(
           archived
               ? l10n.sidebarUnarchiveCount(count)
@@ -3237,6 +3264,11 @@ class _ThreadRow extends StatelessWidget {
           icon: pinned ? Icons.push_pin : Icons.push_pin_outlined,
           onSelected: onPin,
         ),
+      SidebarMenuItem(
+        active ? l10n.sidebarDeactivate : l10n.sidebarActivate,
+        icon: Icons.bolt_outlined,
+        onSelected: () => onActiveAll(targets, !active),
+      ),
       SidebarMenuItem(
         archived ? l10n.sidebarUnarchive : l10n.sidebarArchive,
         icon: Icons.inventory_2_outlined,

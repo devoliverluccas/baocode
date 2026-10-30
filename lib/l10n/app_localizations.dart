@@ -20242,6 +20242,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hidden companies'**
   String get companiesHidden;
+
+  /// No description provided for @sidebarActivate.
+  ///
+  /// In en, this message translates to:
+  /// **'Activate'**
+  String get sidebarActivate;
+
+  /// No description provided for @sidebarDeactivate.
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate'**
+  String get sidebarDeactivate;
+
+  /// No description provided for @sidebarActivateCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Activate {count} Agents'**
+  String sidebarActivateCount(int count);
+
+  /// No description provided for @sidebarDeactivateCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate {count} Agents'**
+  String sidebarDeactivateCount(int count);
+
+  /// No description provided for @sidebarDeactivateAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Deactivate All'**
+  String get sidebarDeactivateAll;
 }
 
 class _AppLocalizationsDelegate

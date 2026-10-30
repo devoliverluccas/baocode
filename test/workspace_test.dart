@@ -773,6 +773,42 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
+  testWidgets('what is sent something stays active until the user says '
+      'otherwise; the two last days are, the first run', (tester) async {
+    addTearDown(FakeCatalog.started.clear);
+    SessionRecord record(String id, DateTime updatedAt) => SessionRecord(
+      id: id,
+      title: id,
+      updatedAt: updatedAt,
+      cwd: '/tmp/other',
+    );
+    FakeCatalog.started.addAll([
+      record('recent', DateTime.now()),
+      record('old', DateTime(2020)),
+    ]);
+    final store = MemoryPreferenceStore({'sidebar': <String, Object?>{}});
+    var workspace = await pumpLoaded(tester, preferences: store);
+    AgentThread thread(String id) =>
+        workspace.threads.firstWhere((thread) => thread.record?.id == id);
+    expect(thread('recent').active, isTrue);
+    expect(thread('old').active, isFalse);
+
+    // Taken off, it stays off: only the first run takes the last days.
+    workspace.setActive([thread('recent')], false);
+    final ours = workspace.selected;
+    ours.session.send(const ComposerMessage(text: 'hi'));
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+    expect(ours.active, isTrue);
+    expect((store.preferences['sidebar'] as Map)['active'], [ours.id]);
+    ours.session.stop();
+    await tester.pump(const Duration(seconds: 1));
+
+    await tester.pumpWidget(const SizedBox());
+    workspace = await pumpLoaded(tester, preferences: store);
+    expect(thread('recent').active, isFalse);
+  });
+
   testWidgets('marks are dropped with the sessions gone, not when the '
       'catalog could not be read', (tester) async {
     final store = MemoryPreferenceStore({
