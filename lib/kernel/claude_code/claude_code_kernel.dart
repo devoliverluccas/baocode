@@ -507,6 +507,13 @@ class ClaudeCodeKernel
   /// The workspace [_cwd] is the folder of, as it is at this launch.
   KernelWorkspace? get _workspace => _context.workspace?.call();
 
+  /// The folders it works in besides [_cwd] (`--add-dir`): so are those
+  /// added since it started (`/add-dir`), once a message is sent.
+  List<String> get _directories {
+    final workspace = _workspace;
+    return [...?workspace?.folders, ...?workspace?.reaches];
+  }
+
   /// When the messages sent while it works are taken up: as its workspace
   /// would have them, else as the user set.
   QueuedMessages get _queuedMessages =>
@@ -605,7 +612,7 @@ class ClaudeCodeKernel
           switches: _appliedSwitches,
           attribution: CommitAttribution.current(),
           env: env,
-          directories: [...?workspace?.folders, ...?workspace?.reaches],
+          directories: _directories,
           folderInstructions: workspace?.folders.isNotEmpty ?? false,
           // Long pastes are kept on this machine: only its agent reads them.
           // A remote one's reads the files of this machine's copied there.
@@ -856,7 +863,8 @@ class ClaudeCodeKernel
     final otherProvider = _providerKey != _launchedProvider;
     if (!otherProvider &&
         _autocompact == _launchedWindow &&
-        PromptSuggestions.current() == _launchedSuggestions) {
+        PromptSuggestions.current() == _launchedSuggestions &&
+        listEquals(_launched?.directories, _directories)) {
       return;
     }
     if (!otherProvider && _busy) return;

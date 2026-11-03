@@ -22232,6 +22232,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Click again to unpick: back to the context as it is now'**
   String get ustatContextUnpickHint;
+
+  /// No description provided for @addDirCommandDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'<path>  Add a folder this conversation can work in'**
+  String get addDirCommandDetail;
+
+  /// No description provided for @addDirAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder added: {path}'**
+  String addDirAdded(String path);
+
+  /// No description provided for @addDirNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Not a folder: {path}'**
+  String addDirNotFound(String path);
+
+  /// No description provided for @addDirNeedsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a message first: the folder is kept with the conversation.'**
+  String get addDirNeedsMessage;
 }
 
 class _AppLocalizationsDelegate

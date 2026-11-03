@@ -12906,4 +12906,22 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get ustatContextUnpickHint => '再次点击取消选中，回到当前上下文';
+
+  @override
+  String get addDirCommandDetail =>
+      '<path>  Add a folder this conversation can work in';
+
+  @override
+  String addDirAdded(String path) {
+    return 'Folder added: $path';
+  }
+
+  @override
+  String addDirNotFound(String path) {
+    return 'Not a folder: $path';
+  }
+
+  @override
+  String get addDirNeedsMessage =>
+      'Send a message first: the folder is kept with the conversation.';
 }

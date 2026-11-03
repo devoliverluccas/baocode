@@ -29,6 +29,9 @@ import 'chat_grid.dart';
 import 'editor_launcher.dart';
 import 'preference_store.dart';
 import 'project_workspace.dart';
+import 'project_workspace_dir_stub.dart'
+    if (dart.library.io) 'project_workspace_dir_io.dart'
+    show isFolder;
 
 /// The arrangement of the project and its conversation in the window.
 enum WorkspaceLayout { chat, ide }
@@ -102,6 +105,15 @@ class AgentSetup {
 }
 
 /// What an agent needs from the user, most urgent first.
+/// Why `/add-dir` added no folder (see [Workspace.addDirectory]).
+enum AddDirFailure {
+  /// The conversation has no session yet to keep it with.
+  noSession,
+
+  /// No folder is there.
+  notFound,
+}
+
 enum ThreadStatus {
   /// Stopped on a question only the user can answer.
   needsInput,
@@ -611,7 +623,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
             ..._preferredSettings,
             ...?_agentSettings[session.id],
           }),
-          workspace: () => _kernelWorkspace(session.cwd),
+          workspace: () => _kernelWorkspace(session.cwd, session.id),
         ),
         historyCount: 0,
       );
@@ -1879,14 +1891,41 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   /// [project]'s workspace; null when it is a folder.
   ProjectWorkspace? workspaceOf(Project project) => _workspaces[project.path];
 
-  KernelWorkspace? _kernelWorkspace(String? cwd) => switch (_workspaces[cwd]) {
-    final workspace? => KernelWorkspace(
-      folders: workspace.folders,
-      instructions: workspace.systemPrompt,
-    ),
-    null when cwd != null => agentSetup?.call(cwd)?.workspace(),
-    null => null,
-  };
+  KernelWorkspace? _kernelWorkspace(String? cwd, String? id) {
+    final workspace = switch (_workspaces[cwd]) {
+      final workspace? => KernelWorkspace(
+        folders: workspace.folders,
+        instructions: workspace.systemPrompt,
+      ),
+      null when cwd != null => agentSetup?.call(cwd)?.workspace(),
+      null => null,
+    };
+    final added = _addedDirs[id];
+    if (added == null) return workspace;
+    return (workspace ?? const KernelWorkspace(folders: [])).reaching(added);
+  }
+
+  // --- /add-dir --------------------------------------------------------------
+
+  /// The folders added to sessions by `/add-dir`, by id: their CLI works in
+  /// them besides.
+  final Map<String, List<String>> _addedDirs = {};
+
+  /// Adds [path] (from [thread]'s folder, if relative) to the folders
+  /// [thread]'s CLI works in, from its next message on (it restarts then,
+  /// resumed). Null when added, else why not.
+  AddDirFailure? addDirectory(AgentThread thread, String path) {
+    final id = thread.id;
+    if (id == null) return AddDirFailure.noSession;
+    final folder = p.normalize(p.join(thread.project.path, path));
+    if (!isFolder(folder)) return AddDirFailure.notFound;
+    final added = _addedDirs[id] ??= [];
+    if (!added.contains(folder)) {
+      added.add(folder);
+      _save();
+    }
+    return null;
+  }
 
   /// Makes a workspace of [folders] named [name], listed first: new agents
   /// in it work across them. Null where workspaces cannot be kept (the
@@ -2293,7 +2332,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     };
     final count =
         _pinned.length + _archived.length + _active.length + _folders.length;
-    final names = _names.length;
+    final names = _names.length + _addedDirs.length;
     _pinned.retainAll(titles.keys);
     _archived.retainAll(titles.keys);
     _active.retainAll(titles.keys);
@@ -2330,6 +2369,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       order.retainWhere(titles.containsKey);
     }
     final ids = {...titles.keys, for (final thread in _threads) ?thread.id};
+    _addedDirs.removeWhere((id, _) => !ids.contains(id));
     final asides = _forgetGoneAsides(ids);
     final drafts = _drafts.length;
     _drafts.removeWhere(
@@ -2346,7 +2386,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     );
     if (_pinned.length + _archived.length + _active.length + _folders.length !=
             count ||
-        _names.length != names ||
+        _names.length + _addedDirs.length != names ||
         asides ||
         size() != before) {
       _save();
@@ -2547,6 +2587,13 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
         if (key is String) _agentSettings[key] = strings(value);
       }
     }
+    if (kept['addedDirs'] case final Map<Object?, Object?> added) {
+      for (final MapEntry(:key, :value) in added.entries) {
+        if ((key, value) case (final String id, final List<Object?> dirs)) {
+          _addedDirs[id] = [...dirs.whereType<String>()];
+        }
+      }
+    }
     if (kept['sidebar'] case final Map<Object?, Object?> sidebar) {
       Iterable<String> list(String key) => switch (sidebar[key]) {
         final List<Object?> list => list.whereType<String>(),
@@ -2690,6 +2737,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       if (_paneTabs) 'paneTabs': true,
       'settings': _settings,
       'agents': _agentSettings,
+      'addedDirs': _addedDirs,
       'ignoredRecommendations': [..._ignoredRecommendations],
       'sidebar': {
         'grouping': ?_sidebarGrouping,
@@ -3310,7 +3358,8 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       KernelChoiceKind.model.name: ?ModelProviders.current.defaultModel,
     });
     final cwd = project.path;
-    final thread = AgentThread._(
+    late final AgentThread thread;
+    thread = AgentThread._(
       project: project,
       kernel: kernel,
       updatedAt: DateTime.now(),
@@ -3320,7 +3369,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
         kernelContext: KernelContext(
           cwd: cwd,
           settings: settings,
-          workspace: () => _kernelWorkspace(cwd),
+          workspace: () => _kernelWorkspace(cwd, thread.id),
         ),
         historyCount: 0,
       ),
@@ -3393,7 +3442,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
             ..._preferredSettings,
             ...?_agentSettings[record.id],
           }),
-          workspace: () => _kernelWorkspace(record.cwd),
+          workspace: () => _kernelWorkspace(record.cwd, record.id),
         ),
         historyCount: 0,
       ),

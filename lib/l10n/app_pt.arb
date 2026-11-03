@@ -3711,5 +3711,9 @@
   "ustatUpstreamRates": "Taxas dos upstreams",
   "ustatUpstreamRatesDetail": "Os modelos destes upstreams sem preço próprio: o preço do mesmo modelo em outro lugar, vezes a taxa.",
   "ustatUpstreamRateClear": "Limpar a taxa",
-  "ustatContextUnpickHint": "Clique de novo para desmarcar: volta ao contexto como está agora"
+  "ustatContextUnpickHint": "Clique de novo para desmarcar: volta ao contexto como está agora",
+  "addDirCommandDetail": "<caminho>  Adicionar uma pasta em que esta conversa pode trabalhar",
+  "addDirAdded": "Pasta adicionada: {path}",
+  "addDirNotFound": "Não é uma pasta: {path}",
+  "addDirNeedsMessage": "Envie uma mensagem antes: a pasta fica guardada com a conversa."
 }
