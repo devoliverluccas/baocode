@@ -22,10 +22,22 @@ class CodexKernel
         ProvidesCommands,
         ReportsContext,
         RewindsConversation,
+        LoadsHistory,
         AcceptsImages {
-  CodexKernel(this.descriptor, this._transport) {
+  CodexKernel(
+    this.descriptor,
+    this._transport, {
+    KernelContext context = const KernelContext(),
+  }) : _context = context {
     _subscription = _transport.messages.listen(_receive);
+    if (context.resume case final session?) {
+      _threadId = session.id;
+      _loadingHistory = true;
+      unawaited(_readHistory());
+    }
   }
+
+  final KernelContext _context;
 
   @override
   final KernelDescriptor descriptor;
@@ -33,8 +45,9 @@ class CodexKernel
   late final StreamSubscription<Map<String, Object?>> _subscription;
 
   @override
-  late final KernelChoiceSource model = LocalChoice(
-    _models,
+  /// The server's own ([_listModels]); until it says, its default.
+  late final LocalChoice model = LocalChoice(
+    [],
     onChanged: (_) => emitInfoChanged(),
   );
 
@@ -48,13 +61,28 @@ class CodexKernel
   KernelHealth get health => KernelHealth.ready;
 
   @override
-  String? get sessionId => null;
+  String? get sessionId => _threadId;
 
   @override
   Future<void> get stopped => Future.value();
 
   @override
-  void prepare() {}
+  void prepare() => unawaited(_connect().catchError((_) {}));
+
+  @override
+  bool get loadingHistory => _loadingHistory;
+  bool _loadingHistory = false;
+
+  // ponytail: the whole conversation read at once (`thread/read`); page it
+  // with `thread/turns/list` if long ones read slowly.
+  @override
+  bool get hasEarlierHistory => false;
+
+  @override
+  bool get loadingEarlier => false;
+
+  @override
+  Future<void> loadEarlier() => Future.value();
 
   @override
   void release() {}
@@ -62,19 +90,15 @@ class CodexKernel
   @override
   void restart() {}
 
-  static const _models = [
-    KernelOption(
-      'gpt-5.5-codex',
-      'GPT-5.5 Codex',
-      Icons.bolt_rounded,
-      'Tuned for coding',
-    ),
-    KernelOption('gpt-5.5', 'GPT-5.5', Icons.bolt_rounded, 'General purpose'),
-    KernelOption('gpt-5.5-mini', 'GPT-5.5 mini', Icons.bolt_rounded, 'Fastest'),
-  ];
-
-  /// Modes are its approval and sandbox policies.
+  /// Modes are its approval and sandbox policies: by default full access,
+  /// nothing asked, as Claude Code's bypassPermissions.
   static const _modes = [
+    KernelOption(
+      'full',
+      'Full access',
+      Icons.lock_open_rounded,
+      'Edit and run anything, without asking',
+    ),
     KernelOption(
       'agent',
       'Agent',
@@ -115,8 +139,19 @@ class CodexKernel
 
   int _requests = 0;
   final Map<Object, Completer<Map<String, Object?>>> _responses = {};
-  bool _initialized = false;
+
+  /// Initialized; again once the server ended.
+  Future<void>? _connected;
+
+  /// Whether the server has the thread loaded, to start turns in.
+  bool _threadLoaded = false;
   String? _threadId;
+
+  /// The server's turns of the thread, in order: to rewind to one.
+  final List<String> _turnIds = [];
+
+  /// Whether history is being shown, not done now: no change to review.
+  bool _replaying = false;
 
   /// Ours, and the server's for the same turn once it says.
   String? _turn;
@@ -139,6 +174,14 @@ class CodexKernel
 
   /// Pending approvals: our request id → the server's JSON-RPC id.
   final Map<String, Object?> _approvals = {};
+
+  /// The approval policy, sandbox mode (a thread's) and sandbox policy (a
+  /// turn's) of [mode].
+  (String, String, Map<String, Object?>) get _policy => switch (mode.selected) {
+    'ask' => ('never', 'read-only', {'type': 'readOnly'}),
+    'agent' => ('on-request', 'workspace-write', {'type': 'workspaceWrite'}),
+    _ => ('never', 'danger-full-access', {'type': 'dangerFullAccess'}),
+  };
 
   // --- Commands -------------------------------------------------------------
 
@@ -169,31 +212,140 @@ class CodexKernel
     unawaited(_start(turn));
   }
 
-  Future<void> _start(KernelTurn turn) async {
-    if (!_initialized) {
-      _initialized = true;
-      await _request('initialize', {
-        'clientInfo': {'name': 'baocode', 'version': '1.0.0'},
-      });
-    }
-    if (_threadId == null) {
-      final started = await _request('thread/start', {'model': model.selected});
-      _threadId = (started['thread'] as Map)['id'] as String;
-    }
-    final readOnly = mode.selected == 'ask';
-    final started = await _request('turn/start', {
-      'threadId': _threadId,
-      'input': [
-        {'type': 'text', 'text': turn.text},
-        for (final note in turn.notes) {'type': 'text', 'text': note},
-      ],
-      'model': model.selected,
-      'approvalPolicy': readOnly ? 'never' : 'on-request',
-      'sandboxPolicy': {'type': readOnly ? 'readOnly' : 'workspaceWrite'},
+  Future<void> _connect() => _connected ??= _open().then(
+    (_) {},
+    onError: (Object error) {
+      _connected = null;
+      throw error;
+    },
+  );
+
+  Future<void> _open() async {
+    await _request('initialize', {
+      'clientInfo': {'name': 'baocode', 'title': 'BaoCode', 'version': '1.0.0'},
     });
-    _serverTurn ??= (started['turn'] as Map)['id'] as String;
-    // Stopped before the server knew the turn: stop it there too.
-    if (_turn != turn.id) _interrupt();
+    _transport.write({'method': 'initialized'});
+    unawaited(_listModels());
+  }
+
+  Future<void> _listModels() async {
+    try {
+      final listed = await _request('model/list', {});
+      final models = [
+        for (final raw in listed['data'] as List? ?? const [])
+          if (raw case {'id': final String id} when raw['hidden'] != true)
+            KernelOption(
+              id,
+              raw['displayName'] as String? ?? id,
+              Icons.bolt_rounded,
+              raw['description'] as String? ?? '',
+            ),
+      ];
+      if (models.isEmpty) return;
+      model.options = models;
+      emitInfoChanged();
+    } on Object {
+      // Its default model, unnamed.
+    }
+  }
+
+  /// The conversation it goes on with, as the server kept it.
+  Future<void> _readHistory() async {
+    try {
+      await _connect();
+      final read = await _request('thread/read', {
+        'threadId': _threadId,
+        'includeTurns': true,
+      });
+      _replaying = true;
+      for (final raw in (read['thread'] as Map?)?['turns'] as List? ?? []) {
+        final turn = raw as Map;
+        _turnIds.add(turn['id'] as String);
+        for (final item in turn['items'] as List? ?? const []) {
+          _replayItem((item as Map).cast<String, Object?>());
+        }
+      }
+    } on Object catch (error) {
+      emit(
+        ItemUpserted(
+          nextSeq,
+          'history-error',
+          NoticeItem(NoticeKind.error, 'Could not read this session: $error'),
+        ),
+      );
+    } finally {
+      _replaying = false;
+      _loadingHistory = false;
+      emitInfoChanged();
+    }
+  }
+
+  void _replayItem(Map<String, Object?> item) {
+    if (item['type'] != 'userMessage') return _itemCompleted(item);
+    emit(
+      ItemUpserted(
+        nextSeq,
+        item['id'] as String,
+        UserMessageItem(
+          text: [
+            for (final input in item['content'] as List? ?? const [])
+              if (input case {'type': 'text', 'text': final String text}) text,
+          ].join('\n\n'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _start(KernelTurn turn) async {
+    try {
+      await _connect();
+      final (approval, sandbox, sandboxPolicy) = _policy;
+      if (!_threadLoaded) {
+        final thread = {
+          'model': ?model.selected,
+          'cwd': ?_context.cwd,
+          'approvalPolicy': approval,
+          'sandbox': sandbox,
+        };
+        final started = _threadId == null
+            ? await _request('thread/start', thread)
+            : await _request('thread/resume', {
+                'threadId': _threadId,
+                ...thread,
+                'excludeTurns': true,
+              });
+        _threadLoaded = true;
+        if (_threadId == null) {
+          _threadId = (started['thread'] as Map)['id'] as String;
+          emitInfoChanged();
+        }
+      }
+      final started = await _request('turn/start', {
+        'threadId': _threadId,
+        'input': [
+          {'type': 'text', 'text': turn.text},
+          for (final note in turn.notes) {'type': 'text', 'text': note},
+        ],
+        'model': ?model.selected,
+        'approvalPolicy': approval,
+        'sandboxPolicy': sandboxPolicy,
+      });
+      final id = (started['turn'] as Map)['id'] as String;
+      _turnIds.add(id);
+      _serverTurn ??= id;
+      // Stopped before the server knew the turn: stop it there too.
+      if (_turn != turn.id) _interrupt();
+    } on Object catch (error) {
+      if (_turn != turn.id) return;
+      emit(
+        ItemUpserted(
+          nextSeq,
+          'error:${turn.id}',
+          NoticeItem(NoticeKind.error, '$error'),
+        ),
+      );
+      _endTurn(turn.id, interrupted: true);
+    }
   }
 
   void _interrupt() {
@@ -236,10 +388,21 @@ class CodexKernel
     required int turns,
     String? lastSeen,
   }) async {
-    if (_threadId case final threadId? when turns > 0) {
-      unawaited(
-        _request('thread/rollback', {'threadId': threadId, 'numTurns': turns}),
-      );
+    if (turns > 0 && _threadId != null) {
+      // The conversation is the server's: gone there first, from the turn
+      // of that message on.
+      if (turns > _turnIds.length) return false;
+      final from = _turnIds.length - turns;
+      try {
+        await _connect();
+        await _request('thread/revert', {
+          'threadId': _threadId,
+          'beforeTurnId': _turnIds[from],
+        });
+      } on Object {
+        return false;
+      }
+      _turnIds.removeRange(from, _turnIds.length);
     }
     emit(Rewound(nextSeq, itemId: itemId, index: index));
     return true;
@@ -258,8 +421,13 @@ class CodexKernel
     final method = message['method'] as String?;
     final params = (message['params'] as Map?)?.cast<String, Object?>();
     if (method == null) {
+      final response = _responses.remove(message['id']);
+      if (message['error'] case final Map error) {
+        response?.completeError(_RpcError('${error['message']}'));
+        return;
+      }
       final result = (message['result'] as Map?)?.cast<String, Object?>();
-      _responses.remove(message['id'])?.complete(result ?? const {});
+      response?.complete(result ?? const {});
       return;
     }
     if (message.containsKey('id')) {
@@ -267,6 +435,12 @@ class CodexKernel
       return;
     }
     switch (method) {
+      case codexExited:
+        _exited('${params!['message']}', params['detail'] as String?);
+      case 'thread/name/updated':
+        if (params!['threadName'] case final String name) {
+          emit(SessionRenamed(nextSeq, name));
+        }
       case 'turn/started':
         _serverTurn = (params!['turn'] as Map)['id'] as String;
       case 'turn/completed':
@@ -330,7 +504,14 @@ class CodexKernel
       'item/fileChange/requestApproval' => ('Apply changes', null),
       _ => (null, null),
     };
-    if (title == null) return;
+    if (title == null) {
+      // Not one it answers: said so, for the server not to wait on it.
+      _transport.write({
+        'id': rpcId,
+        'error': {'code': -32601, 'message': 'Not supported: $method'},
+      });
+      return;
+    }
     final id = 'approval:$rpcId';
     _approvals[id] = rpcId;
     emit(
@@ -346,6 +527,34 @@ class CodexKernel
         ),
       ),
     );
+  }
+
+  /// The server ended: what waited on it fails, a turn under way ends, and
+  /// the next message starts it again, going on with the thread.
+  void _exited(String message, String? detail) {
+    _connected = null;
+    _threadLoaded = false;
+    _serverTurn = null;
+    for (final response in _responses.values) {
+      response.completeError(_RpcError(message));
+    }
+    _responses.clear();
+    if (_turn case final turn?) {
+      emit(
+        ItemUpserted(
+          nextSeq,
+          'error:$turn',
+          NoticeItem(
+            NoticeKind.error,
+            [
+              message,
+              if (detail case final detail? when detail.isNotEmpty) detail,
+            ].join('\n\n'),
+          ),
+        ),
+      );
+      _endTurn(turn, interrupted: true);
+    }
   }
 
   void _itemStarted(Map<String, Object?> item) {
@@ -454,7 +663,7 @@ class CodexKernel
       ];
       return ToolCallItem(
         kind: ToolKind.grep,
-        target: actions.first['query'] as String,
+        target: actions.first['query'] as String? ?? '',
         detail: done ? '${matches.length} results' : null,
         results: matches,
       );
@@ -512,6 +721,7 @@ class CodexKernel
         ),
       ),
     );
+    if (_replaying) return;
     emit(
       FileEdited(
         nextSeq,
@@ -554,4 +764,14 @@ class CodexKernel
       ),
     );
   }
+}
+
+/// What the server answered a request with when it failed, or its ending.
+class _RpcError implements Exception {
+  const _RpcError(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

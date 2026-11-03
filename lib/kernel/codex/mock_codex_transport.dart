@@ -54,7 +54,15 @@ class MockCodexTransport implements CodexTransport {
         _respond(id, {
           'thread': {'id': _threadId},
         });
-      case 'thread/rollback':
+      case 'model/list':
+        _respond(id, {
+          'data': [
+            {'id': 'gpt-5.5-codex', 'displayName': 'GPT-5.5 Codex'},
+            {'id': 'gpt-5.5', 'displayName': 'GPT-5.5'},
+            {'id': 'gpt-5.5-mini', 'displayName': 'GPT-5.5 mini'},
+          ],
+        });
+      case 'thread/revert':
         _respond(id, {
           'thread': {'id': _threadId},
         });

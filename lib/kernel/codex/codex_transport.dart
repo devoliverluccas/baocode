@@ -10,3 +10,7 @@ abstract interface class CodexTransport {
 
   void close();
 }
+
+/// Not Codex's own: what a transport says, as a notification, when the
+/// server ended or could not start (`params`: `message`, `detail`).
+const codexExited = 'baocode/exited';

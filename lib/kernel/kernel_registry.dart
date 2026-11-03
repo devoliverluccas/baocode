@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'agent_kernel.dart';
 import 'claude_code/claude_code_kernel.dart';
+import 'codex/codex_catalog.dart';
+import 'codex/codex_kernel.dart';
+import 'codex/codex_process_transport.dart';
 import '../remote/remote_claude.dart';
 
 /// The kernels the user can pick from. Another kernel is an adapter and a
@@ -26,7 +29,24 @@ abstract final class KernelRegistry {
     catalog: const ClaudeCatalog(),
   );
 
-  static List<KernelDescriptor> _all = [claudeCode];
+  /// The Codex CLI, offered where it is installed.
+  static final KernelDescriptor codex = KernelDescriptor(
+    id: 'codex',
+    label: 'Codex',
+    icon: Icons.data_object_rounded,
+    description: 'OpenAI’s coding agent',
+    create: (context) => CodexKernel(
+      codex,
+      CodexProcessTransport(cwd: context.cwd),
+      context: context,
+    ),
+    catalog: const CodexCatalog(),
+  );
+
+  static List<KernelDescriptor> _all = [
+    claudeCode,
+    if (CodexProcessTransport.locate() != null) codex,
+  ];
 
   static List<KernelDescriptor> get all => _all;
 
