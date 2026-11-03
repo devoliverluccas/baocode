@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/chat/chat_screen.dart';
 import 'package:baocode/chat/chat_session.dart';
@@ -841,6 +842,35 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     workspace = await pumpLoaded(tester, preferences: store);
     expect(thread('recent').active, isFalse);
+  });
+
+  testWidgets('/add-dir keeps a folder with the session, given its CLI '
+      'as --add-dir; one not there is not added', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('add_dir');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final store = MemoryPreferenceStore();
+    var workspace = await pumpLoaded(tester, preferences: store);
+    AgentThread kept() => workspace.threads.firstWhere(
+      (thread) => thread.record?.id == FakeCatalog.kept.id,
+    );
+    expect(
+      workspace.addDirectory(kept(), p.join(dir.path, 'missing')),
+      AddDirFailure.notFound,
+    );
+    expect(workspace.addDirectory(kept(), dir.path), isNull);
+    expect(workspace.addDirectory(kept(), dir.path), isNull);
+    expect(
+      workspace.addDirectory(workspace.selected, dir.path),
+      AddDirFailure.noSession,
+    );
+
+    // The next run.
+    await tester.pumpWidget(const SizedBox());
+    workspace = await pumpLoaded(tester, preferences: store);
+    final context = kept().session.kernelContext;
+    expect(context.workspace!()!.reaches, [p.normalize(dir.path)]);
+    kept().session.stop();
+    await tester.pump(const Duration(seconds: 1));
   });
 
   testWidgets('marks are dropped with the sessions gone, not when the '

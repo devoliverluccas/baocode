@@ -8667,5 +8667,19 @@
   "ustatUpstreamRates": "Upstream rates",
   "ustatUpstreamRatesDetail": "The models of these upstreams without a price of their own: the same model's price elsewhere, times the rate.",
   "ustatUpstreamRateClear": "Clear the rate",
-  "ustatContextUnpickHint": "Click again to unpick: back to the context as it is now"
+  "ustatContextUnpickHint": "Click again to unpick: back to the context as it is now",
+  "addDirCommandDetail": "<path>  Add a folder this conversation can work in",
+  "addDirAdded": "Folder added: {path}",
+  "@addDirAdded": {
+    "placeholders": {
+      "path": {"type": "String"}
+    }
+  },
+  "addDirNotFound": "Not a folder: {path}",
+  "@addDirNotFound": {
+    "placeholders": {
+      "path": {"type": "String"}
+    }
+  },
+  "addDirNeedsMessage": "Send a message first: the folder is kept with the conversation."
 }

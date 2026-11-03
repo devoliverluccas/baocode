@@ -129,6 +129,20 @@ class KernelWorkspace {
   /// changes reviewed. A bot's reach into the user's projects.
   final List<String> reaches;
 
+  /// This with [more] among [reaches] (`/add-dir`'s).
+  KernelWorkspace reaching(List<String> more) => KernelWorkspace(
+    folders: folders,
+    instructions: instructions,
+    ownPrompt: ownPrompt,
+    tools: tools,
+    userServers: userServers,
+    allowedTools: allowedTools,
+    approvesAll: approvesAll,
+    reaches: [...reaches, ...more],
+    queuedMessages: queuedMessages,
+    queuedInPlace: queuedInPlace,
+  );
+
   /// Whether what the user writes while it works shows where they wrote
   /// it, as a chat app's messages do, from the moment it is sent: not
   /// apart, until taken up.

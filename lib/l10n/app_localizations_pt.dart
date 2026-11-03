@@ -13751,4 +13751,22 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get ustatContextUnpickHint =>
       'Clique de novo para desmarcar: volta ao contexto como está agora';
+
+  @override
+  String get addDirCommandDetail =>
+      '<caminho>  Adicionar uma pasta em que esta conversa pode trabalhar';
+
+  @override
+  String addDirAdded(String path) {
+    return 'Pasta adicionada: $path';
+  }
+
+  @override
+  String addDirNotFound(String path) {
+    return 'Não é uma pasta: $path';
+  }
+
+  @override
+  String get addDirNeedsMessage =>
+      'Envie uma mensagem antes: a pasta fica guardada com a conversa.';
 }

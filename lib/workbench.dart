@@ -4763,6 +4763,10 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         onSideQuestion: (question) => _askBeside(thread, question),
         onFork: (message) =>
             unawaited(_forkFromComposer(thread, message, embedded: embedded)),
+        // Claude Code's `--add-dir`, as its terminal's `/add-dir` is.
+        onAddDirectory: thread.kernel.id == 'claude-code'
+            ? (path) => _addDirectory(thread, path)
+            : null,
         asideAt: _asideCards(thread, embedded: embedded),
         back: switch (_workspace.parentOf(thread)) {
           final parent? => (
@@ -4876,6 +4880,20 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       return;
     }
     unawaited(_workspace.askBeside(thread, question));
+  }
+
+  /// `/add-dir` in [thread]: [path] added to its folders, as a notice says.
+  void _addDirectory(AgentThread thread, String path) {
+    final l10n = context.l10n;
+    final (severity, message) = switch (_workspace.addDirectory(thread, path)) {
+      null => (IdeSeverity.info, l10n.addDirAdded(path)),
+      AddDirFailure.notFound => (
+        IdeSeverity.warning,
+        l10n.addDirNotFound(path),
+      ),
+      AddDirFailure.noSession => (IdeSeverity.info, l10n.addDirNeedsMessage),
+    };
+    _notifications.notify(severity, message);
   }
 
   /// `/fork` in [thread]: copied as the sidebar's Fork does and the copy

@@ -13656,4 +13656,22 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get ustatContextUnpickHint =>
       'Click again to unpick: back to the context as it is now';
+
+  @override
+  String get addDirCommandDetail =>
+      '<path>  Add a folder this conversation can work in';
+
+  @override
+  String addDirAdded(String path) {
+    return 'Folder added: $path';
+  }
+
+  @override
+  String addDirNotFound(String path) {
+    return 'Not a folder: $path';
+  }
+
+  @override
+  String get addDirNeedsMessage =>
+      'Send a message first: the folder is kept with the conversation.';
 }

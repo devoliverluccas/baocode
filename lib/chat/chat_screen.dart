@@ -103,6 +103,7 @@ class ChatScreen extends StatefulWidget {
     this.openEditor,
     this.onSideQuestion,
     this.onFork,
+    this.onAddDirectory,
     this.asideAt,
     this.back,
   });
@@ -235,6 +236,10 @@ class ChatScreen extends StatefulWidget {
   /// copied into a new one, as the sidebar's Fork, and what follows the
   /// command (empty for none) is sent there.
   final ValueChanged<ComposerMessage>? onFork;
+
+  /// Given, `/add-dir <path>` sent here is not the agent's (Claude Code
+  /// takes it in its terminal only): the path is given this.
+  final ValueChanged<String>? onAddDirectory;
 
   /// What shows under the conversation's item of the id given: the
   /// conversations asked beside it from there (see [onSideQuestion]).
@@ -788,6 +793,7 @@ class _ChatScreenState extends State<ChatScreen>
       _commandSource = commands;
       final aside = widget.onSideQuestion != null;
       final fork = widget.onFork != null;
+      final addDir = widget.onAddDirectory != null;
       _commands = [
         // Taken here, not by the agent: a conversation beside this one
         // (see [ChatScreen.onSideQuestion]), in place of the CLI's own.
@@ -806,9 +812,18 @@ class _ChatScreenState extends State<ChatScreen>
             detail: context.l10n.forkCommandDetail,
             icon: Codicons.repoForked,
           ),
+        // And a folder its CLI works in (see [ChatScreen.onAddDirectory]).
+        if (addDir)
+          Suggestion(
+            kind: SuggestionKind.command,
+            label: _addDirCommand,
+            detail: context.l10n.addDirCommandDetail,
+            icon: Codicons.newFolder,
+          ),
         for (final command in commands)
           if ((!aside || command.name != _asideCommand) &&
-              (!fork || command.name != _forkCommand))
+              (!fork || command.name != _forkCommand) &&
+              (!addDir || command.name != _addDirCommand))
             Suggestion(
               kind: SuggestionKind.command,
               label: command.name,
@@ -860,8 +875,27 @@ class _ChatScreenState extends State<ChatScreen>
     return true;
   }
 
+  static const _addDirCommand = 'add-dir';
+
+  /// Takes `/add-dir <path>` for a folder its CLI works in besides: true
+  /// when it was one (`/add-dir` alone adds nothing).
+  bool _interceptAddDirectory(ComposerMessage message) {
+    final handler = widget.onAddDirectory;
+    if (handler == null) return false;
+    final text = message.text.trim();
+    if (!text.startsWith(RegExp('^/$_addDirCommand(\\s|\$)'))) return false;
+    var path = text.substring(_addDirCommand.length + 1).trim();
+    if (path.length > 1 && path.startsWith('"') && path.endsWith('"')) {
+      path = path.substring(1, path.length - 1);
+    }
+    if (path.isNotEmpty) handler(path);
+    return true;
+  }
+
   bool _intercept(ComposerMessage message) =>
-      _interceptSideQuestion(message) || _interceptFork(message);
+      _interceptSideQuestion(message) ||
+      _interceptFork(message) ||
+      _interceptAddDirectory(message);
 
   List<KernelCommand>? _commandSource;
   List<Suggestion> _commands = const [];
@@ -1455,7 +1489,10 @@ class _ChatScreenState extends State<ChatScreen>
           },
           contextPanelOpen: _contextPanelOpen,
           onToggleContextPanel: _toggleContextPanel,
-          onIntercept: widget.onSideQuestion == null && widget.onFork == null
+          onIntercept:
+              widget.onSideQuestion == null &&
+                  widget.onFork == null &&
+                  widget.onAddDirectory == null
               ? null
               : _intercept,
         ),
