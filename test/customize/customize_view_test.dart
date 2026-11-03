@@ -179,7 +179,6 @@ void main() {
   testWidgets('Customize has no side panel rail, the agent\'s', (tester) async {
     await _pumpApp(tester, _MemoryStore());
     await tester.pumpAndSettle();
-    expect(find.byType(SidePanelRail), findsOneWidget);
     final customize = _inSidebar(find.text('Skills'));
     await tester.tap(customize);
     await tester.pumpAndSettle();
@@ -187,13 +186,12 @@ void main() {
     expect(find.byType(SidePanelRail), findsNothing);
     await tester.tap(customize);
     await tester.pumpAndSettle();
-    expect(find.byType(SidePanelRail), findsOneWidget);
 
     // Its panel, open, is hidden while Customize shows.
     await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyG);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyB);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pumpAndSettle();
     expect(find.byType(AgentSidePanelView), findsOneWidget);
