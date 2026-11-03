@@ -35,14 +35,18 @@ class BaoWindow: NSWindow {
     titleVisibility = .hidden
     titlebarAppearsTransparent = true
     styleMask.insert(.fullSizeContentView)
-    isMovableByWindowBackground = true
+    // Not moved by its title bar on its own: the Window Server starts that
+    // drag before the app sees the press, so a split pane's title, under
+    // the title bar, could not be dragged. Flutter, which knows what is
+    // under the press, moves the window instead (dragWindow).
+    isMovable = false
     // One window a folder: no system tabs (the IDE has its own).
     tabbingMode = .disallowed
-    // See-through, for the sidebar's material (see VibrantContent); light
-    // or dark as the app's color theme is, whatever the system's appearance.
-    // The last theme's until Flutter says (setAppearance).
-    isOpaque = false
-    backgroundColor = .clear
+    // See-through, for the sidebar's material (see VibrantContent), where it
+    // blurs (see keepOpaque); light or dark as the app's color theme is,
+    // whatever the system's appearance. The last theme's until Flutter says
+    // (setAppearance).
+    keepOpaque(!Self.keptWindowBlur)
     appearance = NSAppearance(named: Self.keptDarkAppearance ? .darkAqua : .aqua)
     flutterViewController.backgroundColor = .clear
 
@@ -130,14 +134,18 @@ class BaoWindow: NSWindow {
           let container = titleBar.superview
     else { return }
     let buttonHeight = close.frame.height
-    let fromTop = { (y: CGFloat, height: CGFloat) in
-      titleBar.isFlipped ? y + buttonHeight / 2 : height - y - buttonHeight / 2
+    // How far below the container's top a point of the title bar's is,
+    // and back: through AppKit's conversion, whichever of them is flipped
+    // and wherever in the container the title bar is: as the container
+    // grows, a window may keep it at its top rather than its foot, the
+    // buttons then placed as from the foot going up past the window's edge.
+    let fromTop = { (y: CGFloat) -> CGFloat in
+      let point = container.convert(NSPoint(x: 0, y: y), from: titleBar)
+      return container.isFlipped ? point.y : container.bounds.height - point.y
     }
     if trafficLightsHome == nil {
       if trafficLightsDrop == 0 { return }
-      trafficLightsHome = (
-        container.frame.height, fromTop(close.frame.origin.y, container.frame.height)
-      )
+      trafficLightsHome = (container.frame.height, fromTop(close.frame.midY))
     }
     guard let home = trafficLightsHome else { return }
     let center = home.center + trafficLightsDrop
@@ -145,14 +153,60 @@ class BaoWindow: NSWindow {
     bar.size.height = max(home.barHeight, center * 2)
     bar.origin.y = frame.height - bar.size.height
     container.frame = bar
-    let y = titleBar.isFlipped
-      ? center - buttonHeight / 2 : bar.height - center - buttonHeight / 2
+    // The title bar as tall as the container, the buttons inside it.
+    titleBar.frame = container.bounds
+    let inContainer = NSPoint(
+      x: 0, y: container.isFlipped ? center : container.bounds.height - center)
+    let y = titleBar.convert(inContainer, from: container).y - buttonHeight / 2
     for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
       guard let button = standardWindowButton(kind) else { continue }
       button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: y))
-    }  }
+    }
+  }
 
   private var drops: FileDropView?
+
+  /// The press under way, for Flutter's dragWindow: by the time Flutter has
+  /// seen it move, the current event is a later one.
+  private var press: NSEvent?
+
+  /// The mouse-up of a press the Window Server took to move the window,
+  /// until it comes: it may not (see dragWindow).
+  private var upOwed = false
+
+  override func sendEvent(_ event: NSEvent) {
+    switch event.type {
+    case .leftMouseUp:
+      press = nil
+      upOwed = false
+    case .leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved:
+      // Past the drag with no mouse-up: Flutter is given one where it
+      // ended, or it would take the button for still down.
+      if upOwed, let up = NSEvent.mouseEvent(
+        with: .leftMouseUp, location: event.locationInWindow,
+        modifierFlags: [], timestamp: event.timestamp,
+        windowNumber: windowNumber, context: nil,
+        eventNumber: 0, clickCount: 1, pressure: 0
+      ) {
+        upOwed = false
+        super.sendEvent(up)
+      }
+      if event.type == .leftMouseDown { press = event }
+    default:
+      break
+    }
+    super.sendEvent(event)
+  }
+
+  /// Moves the window with [press], as its title bar would have: the Window
+  /// Server takes the drag from here (performDrag works with the window not
+  /// movable on its own), and may not send the press's mouse-up.
+  private func dragWindow() {
+    guard let press, NSEvent.pressedMouseButtons & 1 != 0 else { return }
+    self.press = nil
+    performDrag(with: press)
+    upOwed = true
+  }
 
   /// Keeps the Flutter view's scale the window's. Flutter takes the pixel
   /// ratio from the view's layer (`contentsScale`) but the size in pixels
@@ -224,6 +278,10 @@ class BaoWindow: NSWindow {
       // grown by twice that as the interface is zoomed (see ui_zoom.dart).
       trafficLightsDrop = CGFloat(call.arguments as? Double ?? 0)
       placeTrafficLights()
+      result(nil)
+    case "dragWindow":
+      // A press dragged on the empty part of the title bar Flutter draws.
+      dragWindow()
       result(nil)
     case "handleTitleDoubleClick":
       // A double click on the empty part of the title bar Flutter draws
@@ -326,6 +384,10 @@ class BaoWindow: NSWindow {
       let pasteboard = NSPasteboard.general
       result(pasteboard.canReadObject(
         forClasses: [NSString.self, NSURL.self, NSImage.self], options: nil))
+    case "writePasteboardMarkdown":
+      result(Self.writePasteboardMarkdown(call.arguments as? [String: Any] ?? [:]))
+    case "readPasteboardMarkdown":
+      result(Self.readPasteboardMarkdown())
     case "trashItem":
       // The IDE's Move to Trash (Finder's Put Back works on it).
       guard let path = call.arguments as? String else {
@@ -376,6 +438,15 @@ class BaoWindow: NSWindow {
   /// window, or not (Flutter then paints the window opaque).
   func setBlurred(_ blurred: Bool) {
     (contentViewController as? VibrantContent)?.blurred = blurred
+    keepOpaque(!blurred)
+  }
+
+  /// Opaque where nothing behind the window shows through it: the Window
+  /// Server, drawing each of the app's frames, then neither blends the
+  /// window over what is behind it nor draws that first.
+  private func keepOpaque(_ opaque: Bool) {
+    isOpaque = opaque
+    backgroundColor = opaque ? .windowBackgroundColor : .clear
   }
 
   /// Whether the last color theme was dark; dark the first time.
@@ -501,6 +572,30 @@ class BaoWindow: NSWindow {
     let pasteboard = NSPasteboard.general
     pasteboard.clearContents()
     return pasteboard.writeObjects([item])
+  }
+
+  /// What an editor copied, beside its text: its markdown, the composer's
+  /// tags and all (see lib/platform/native_md_clipboard.dart).
+  static let markdownType = NSPasteboard.PasteboardType("dev.baocode.markdown")
+
+  /// Puts `text` on the clipboard for other apps, and beside it `copy`
+  /// (an editor's, as JSON, kept as it is) for the app's editors.
+  static func writePasteboardMarkdown(_ arguments: [String: Any]) -> Bool {
+    guard let text = arguments["text"] as? String,
+          let copy = arguments["copy"] as? String
+    else { return false }
+    let item = NSPasteboardItem()
+    item.setString(text, forType: .string)
+    item.setString(copy, forType: markdownType)
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    return pasteboard.writeObjects([item])
+  }
+
+  /// The editors' copy on the clipboard; nil when something was copied
+  /// since (that cleared it).
+  static func readPasteboardMarkdown() -> String? {
+    NSPasteboard.general.string(forType: markdownType)
   }
 
   /// Images on the clipboard: copied image files, or, when there is no

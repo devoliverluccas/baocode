@@ -7,7 +7,9 @@ import 'package:flutter/scheduler.dart';
 import '../../chat/chat_keys.dart';
 import '../../chat/side_panel/side_panel_view.dart' show SidePanelToggle;
 import '../../icons/project_icon_view.dart';
+import '../../ide/editor_minimap_setting.dart';
 import '../../ide/editor_word_wrap.dart';
+import '../../ide/ide_command_center.dart';
 import '../../ide/ide_hover.dart';
 import '../../ide/ide_layout.dart';
 import '../../ide/ide_modern_ui.dart';
@@ -56,12 +58,14 @@ class WindowHeader extends StatefulWidget {
     this.viewToggle,
     this.sidePanelShown = false,
     this.onToggleSidePanel,
+    this.chatTools = true,
     this.onOpenSettings,
     this.onCommand,
     this.onFileCommand,
     this.autoSave = false,
     this.project,
     this.ideLayout,
+    this.ideNavigation,
     this.ide,
     this.hasFolder,
     this.onBack,
@@ -88,6 +92,12 @@ class WindowHeader extends StatefulWidget {
 
   /// Over the IDE, which of its parts show, for its layout toggles.
   final IdeLayout? ideLayout;
+
+  /// Over the IDE, whether its Go Back and Go Forward have somewhere to
+  /// go: its command center's arrows, beside its search box, in the middle
+  /// of the strip as on its own title bar (#539). They run through
+  /// [onFileCommand].
+  final ValueListenable<({bool back, bool forward})>? ideNavigation;
 
   /// Whether it is over the IDE; by default, whether the workspace shows
   /// it ([Workspace.layout]). An IDE window's always is.
@@ -154,6 +164,11 @@ class WindowHeader extends StatefulWidget {
   final bool sidePanelShown;
   final VoidCallback? onToggleSidePanel;
 
+  /// Whether the strip has the chat's terminal, side panel and editor
+  /// buttons: not while conversations are side by side, each pane's title
+  /// bar having its own agent's (the menus still toggle the focused one's).
+  final bool chatTools;
+
   /// The File menu's Settings…: opens the settings dialog.
   final VoidCallback? onOpenSettings;
 
@@ -194,6 +209,7 @@ class _WindowHeaderState extends State<WindowHeader> {
   final _sidePanel = GlobalKey(debugLabel: 'header side panel');
   final _open = GlobalKey(debugLabel: 'header open in editor');
   final _back = GlobalKey(debugLabel: 'header back to chat');
+  final _center = GlobalKey(debugLabel: 'header command center');
   final _minimize = GlobalKey(debugLabel: 'window minimize');
   final _maximize = GlobalKey(debugLabel: 'window maximize');
   final _close = GlobalKey(debugLabel: 'window close');
@@ -327,6 +343,12 @@ class _WindowHeaderState extends State<WindowHeader> {
                     ),
                   ),
                 )
+              else if (_commandCenter(ide && !settings) case final center?)
+                Expanded(
+                  child: Center(
+                    child: KeyedSubtree(key: _center, child: center),
+                  ),
+                )
               else
                 const Spacer(),
               // Under the settings, whose barrier takes their clicks, the
@@ -346,6 +368,34 @@ class _WindowHeaderState extends State<WindowHeader> {
     );
   }
 
+  /// Over the IDE, its command center: Go Back, Go Forward and the search
+  /// box, run as the IDE's commands.
+  Widget? _commandCenter(bool shown) {
+    final navigation = widget.ideNavigation;
+    final run = widget.onFileCommand;
+    if (!shown || navigation == null || run == null) return null;
+    final l10n = context.l10n;
+    final hasFolder = widget.hasFolder ?? widget.workspace.ideFolder != null;
+    final project = hasFolder ? widget.project : null;
+    return IdeCommandCenter(
+      label: project?.name ?? l10n.ideSearchOpenFiles,
+      tooltip: ChatKeys.titleWithKey(
+        project == null
+            ? l10n.ideSearchOpenFiles
+            : l10n.ideSearchProject(project.name),
+        _quickOpenCommand,
+        ChatKeys.ideLayout,
+      ),
+      onSearch: () => run(_quickOpenCommand),
+      navigation: navigation,
+      onNavigate: (back) => run(
+        back ? IdeCommandCenter.backCommand : IdeCommandCenter.forwardCommand,
+      ),
+    );
+  }
+
+  static const _quickOpenCommand = 'workbench.action.quickOpen';
+
   /// The tools on the right of the strip, before the window's buttons.
   List<Widget> _tools(IdeLayout? layout, bool ide) => [
     if (layout != null) ...[
@@ -356,8 +406,10 @@ class _WindowHeaderState extends State<WindowHeader> {
       KeyedSubtree(key: _view, child: toggle),
     // The chat's terminal and side panel where the IDE has its
     // panel and chat, the pin after them, and the way to the other
-    // layout last: each where it was after a switch.
-    if (widget.onToggleTerminal case final toggle? when !ide)
+    // layout last: each where it was after a switch. Agents side by side
+    // have theirs in their panes, the pin alone here (see [chatTools]).
+    if (widget.onToggleTerminal case final toggle?
+        when !ide && widget.chatTools)
       KeyedSubtree(
         key: _terminal,
         child: Padding(
@@ -369,7 +421,8 @@ class _WindowHeaderState extends State<WindowHeader> {
           ),
         ),
       ),
-    if (widget.onToggleSidePanel case final toggle? when !ide)
+    if (widget.onToggleSidePanel case final toggle?
+        when !ide && widget.chatTools)
       KeyedSubtree(
         key: _sidePanel,
         child: Padding(
@@ -390,7 +443,7 @@ class _WindowHeaderState extends State<WindowHeader> {
       ),
     ),
     // The chat's; the IDE is the editor there.
-    if (widget.project case final project? when !ide) ...[
+    if (widget.project case final project? when !ide && widget.chatTools) ...[
       const SizedBox(width: 8),
       KeyedSubtree(
         key: _open,
@@ -439,6 +492,7 @@ class _WindowHeaderState extends State<WindowHeader> {
         _pin,
         _open,
         _back,
+        _center,
       ])
         ?_rect(key),
     ];
@@ -685,6 +739,13 @@ class _WindowHeaderState extends State<WindowHeader> {
             checked: EditorWordWrap.on.value,
             shortcut: _shortcut(EditorWordWrap.commandId, ChatKeys.ideLayout),
             onSelected: EditorWordWrap.toggle,
+          ),
+        if (ide)
+          HeaderMenuItem(
+            l10n.menuMinimap,
+            checked: EditorMinimap.on.value,
+            shortcut: _shortcut(EditorMinimap.commandId, ChatKeys.ideLayout),
+            onSelected: EditorMinimap.toggle,
           ),
         HeaderMenuItem(
           l10n.menuKeepOnTop,

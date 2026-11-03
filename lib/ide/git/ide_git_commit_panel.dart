@@ -19,6 +19,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../base/give_way_row.dart';
 import '../../base/smooth_scroll.dart';
 import '../../chat/composer/composer_files.dart';
 import '../../chat/composer/file_drag.dart';
@@ -41,7 +42,9 @@ import 'git_partial.dart';
 import 'git_review.dart';
 import 'git_repository.dart';
 import 'git_service.dart';
+import 'ide_git_list_tree_switch.dart';
 import 'ide_git_log_view.dart' show IdeGitDiffFile;
+import '../../workspace/islands.dart';
 import 'ide_git_merge_dialog.dart';
 import 'ide_git_stash_view.dart';
 import 'ide_scm_view.dart' show IdeScmSession;
@@ -94,11 +97,13 @@ class IdeGitCommitPanel extends StatefulWidget {
   final Future<void> Function(String path, {bool focusEditor}) onOpen;
 
   /// Shows a change: its diff, where the host shows one ([focusEditor]: in
-  /// the editor, to edit).
+  /// the editor, to edit); [among], the changes of its repository as they
+  /// list, for the diff to step through in that order.
   final Future<void> Function(
     IdeGitResource resource, {
     bool head,
     bool focusEditor,
+    List<IdeGitResource>? among,
   })
   onOpenChange;
 
@@ -232,6 +237,15 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
   /// panel comes back.
   String? get _selected => _session.listSelected;
   set _selected(String? key) => _session.listSelected = key;
+
+  /// The path of the file whose row is selected, if one is.
+  @visibleForTesting
+  String? get selectedFile => switch (_selected) {
+    final key? when key.startsWith('x:') => key.substring(
+      key.lastIndexOf(':') + 1,
+    ),
+    _ => null,
+  };
   IdeInputValidation? _validation;
   bool _committing = false;
 
@@ -265,6 +279,7 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
     _inputFocus.addListener(_rebuild);
     widget.hunks?.addListener(_rebuild);
     widget.changelists?.addListener(_rebuild);
+    _session.log.addListener(_followDiff);
   }
 
   @override
@@ -273,6 +288,8 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
     if (!identical(oldWidget.session, widget.session)) {
       oldWidget.session.message.removeListener(_messageChanged);
       widget.session.message.addListener(_messageChanged);
+      oldWidget.session.log.removeListener(_followDiff);
+      widget.session.log.addListener(_followDiff);
       _messageText = widget.session.message.text;
       _validation = null;
     }
@@ -289,6 +306,7 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
   @override
   void dispose() {
     _session.message.removeListener(_messageChanged);
+    _session.log.removeListener(_followDiff);
     widget.hunks?.removeListener(_rebuild);
     widget.changelists?.removeListener(_rebuild);
     _listFocus.dispose();
@@ -538,7 +556,7 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
     final lists = widget.changelists;
     if (lists == null || !lists.several) return false;
     final list = lists.byId(lists.listOf(path));
-    return list != null && list.id != lists.active && !list.turn;
+    return list != null && list.id != lists.active;
   }
 
   /// Whether [files] are checked: all (true), none (false), or some (null),
@@ -606,7 +624,12 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
     });
   }
 
-  List<_Row> get _rows {
+  List<_Row> get _rows => _rowsOf();
+
+  /// The tree's rows; [all]: those in collapsed folders and groups too.
+  List<_Row> _rowsOf({bool all = false}) {
+    bool collapsed(IdeGitRepository git, String key) =>
+        !all && _collapsed(git, key);
     final repositories = [
       for (final git in _repositories)
         if (git.state != null) git,
@@ -626,7 +649,7 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
       if (several) {
         final row = _RepoRow(git, all);
         rows.add(row);
-        if (_collapsed(git, row.key)) continue;
+        if (collapsed(git, row.key)) continue;
         depth = 1;
         parent = row.key;
       }
@@ -635,7 +658,7 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
         final group = _GroupRow(git, kind, files, depth, list: list)
           ..parent = parent;
         rows.add(group);
-        if (_collapsed(git, group.key)) return;
+        if (collapsed(git, group.key)) return;
         if (!byDirectory) {
           for (final file in files) {
             rows.add(
@@ -658,7 +681,7 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
                   list: list,
                 )..parent = parent;
                 rows.add(folder);
-                if (!_collapsed(git, folder.key)) {
+                if (!collapsed(git, folder.key)) {
                   add(node.children, depth + 1, folder.key);
                 }
               case IdeScmTreeFile(:final resource):
@@ -687,7 +710,6 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
               for (final file in files)
                 if (lists.listOf(file.path) == list.id) file,
             ];
-            if (inList.isEmpty && list.turn) continue;
             addGroup(kind, inList, list: list.id);
           }
           continue;
@@ -739,11 +761,46 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
     }
   }
 
-  /// A file's changes: where the host shows them, or ([editor]) in the
-  /// editor.
+  /// A file's changes: where the host shows them, among its repository's
+  /// as they list (collapsed or not), or ([editor]) in the editor.
   Future<void> _show(_FileRow row, {bool editor = false}) async {
     if (!identical(row.git, _git)) widget.host.selectRepository(row.git);
-    await widget.onOpenChange(row.resource, focusEditor: editor);
+    final among = <IdeGitResource>[];
+    for (final other in _rowsOf(all: true)) {
+      if (other is _FileRow &&
+          identical(other.git, row.git) &&
+          !among.any((file) => file.path == other.resource.path)) {
+        among.add(other.resource);
+      }
+    }
+    await widget.onOpenChange(row.resource, focusEditor: editor, among: among);
+  }
+
+  /// The local change the log's diff shows, stepped to from its file
+  /// menu or its arrows: selected here too, its folders opened.
+  void _followDiff() {
+    final diff = _session.log.diff;
+    final git = _git;
+    if (diff == null || diff.file.commitId != null || git == null) return;
+    final path = diff.file.path;
+    final rows = _rowsOf(all: true);
+    final row = rows
+        .whereType<_FileRow>()
+        .where((row) => identical(row.git, git) && row.resource.path == path)
+        .firstOrNull;
+    if (row == null || row.key == _selected) return;
+    final byKey = {for (final row in rows) row.key: row};
+    final folds = _sessionOf(git).collapsedFolders;
+    for (
+      var parent = row.parent;
+      parent != null;
+      parent = byKey[parent]?.parent
+    ) {
+      folds.remove(parent);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _select(row, reveal: true);
+    });
   }
 
   void _toggleCheck(_Row row) {
@@ -1499,18 +1556,9 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
           ? const SizedBox.shrink()
           : git.state == null
           ? _welcome(git)
-          : LayoutBuilder(
-              builder: (context, constraints) {
+          : Builder(
+              builder: (context) {
                 final rows = _rows;
-                // The message and its buttons: what is left to the tree, a
-                // third at least.
-                final treeHeight = math.max(
-                  80.0,
-                  math.min(
-                    _treeHeight ?? constraints.maxHeight * .55,
-                    constraints.maxHeight - 170,
-                  ),
-                );
                 if (_stashTab && widget.onShowDiff != null) {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1557,19 +1605,51 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
                           ),
                         ),
                       ),
-                    SizedBox(
-                      height: treeHeight,
-                      child: rows.isEmpty
-                          ? _empty(context)
-                          : _tree(context, rows),
+                    // Under the bars over it: the tree, and the message
+                    // and its buttons in what is left to it, 170 at least.
+                    // Shorter than both at their least (a side panel beside
+                    // one of agents above and below each other), they
+                    // scroll.
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final height = math.max(
+                            constraints.maxHeight,
+                            80.0 + _Divider.height + 170,
+                          );
+                          final treeHeight = math.max(
+                            80.0,
+                            math.min(
+                              _treeHeight ?? height * .55,
+                              height - _Divider.height - 170,
+                            ),
+                          );
+                          final parts = Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(
+                                height: treeHeight,
+                                child: rows.isEmpty
+                                    ? _empty(context)
+                                    : _tree(context, rows),
+                              ),
+                              _Divider(
+                                size: treeHeight,
+                                onResize: (height) =>
+                                    setState(() => _treeHeight = height),
+                                onReset: () =>
+                                    setState(() => _treeHeight = null),
+                              ),
+                              Expanded(child: _commitArea(context)),
+                            ],
+                          );
+                          if (height <= constraints.maxHeight) return parts;
+                          return SingleChildScrollView(
+                            child: SizedBox(height: height, child: parts),
+                          );
+                        },
+                      ),
                     ),
-                    _Divider(
-                      size: treeHeight,
-                      onResize: (height) =>
-                          setState(() => _treeHeight = height),
-                      onReset: () => setState(() => _treeHeight = null),
-                    ),
-                    Expanded(child: _commitArea(context)),
                   ],
                 );
               },
@@ -1585,18 +1665,16 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
       selected: _stashTab == stash,
       onTap: () => setState(() => _stashTab = stash),
     );
+    // A segmented control, as the panel's views'.
     return Container(
-      height: 28,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: themeColors.get('panel.border') ?? Colors.transparent,
-          ),
-        ),
-      ),
+      height: 10 + IslandSegment.height + 4,
+      padding: const EdgeInsets.fromLTRB(Islands.inset, 10, Islands.inset, 4),
       child: Row(
-        children: [tab(l10n.gitCommitTab, false), tab(l10n.gitStashTab, true)],
+        children: [
+          tab(l10n.gitCommitTab, false),
+          const SizedBox(width: 2),
+          tab(l10n.gitStashTab, true),
+        ],
       ),
     );
   }
@@ -1608,7 +1686,8 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
     return SizedBox(
       height: 30,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+        // The icons as far in as the card's other controls.
+        padding: const EdgeInsets.symmetric(horizontal: Islands.inset - 4),
         child: Row(
           children: [
             IdeActionButton(
@@ -1759,100 +1838,117 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
     final rows = _rows;
     final focused = rows.where((row) => row.key == _selected).firstOrNull;
     final byDirectory = git == null ? true : _sessionOf(git).treeView;
+    Widget viewSwitch({required bool labels}) => IdeGitListTreeSwitch(
+      tree: byDirectory,
+      labels: labels,
+      onChanged: (tree) {
+        if (tree == byDirectory) return;
+        setState(() {
+          for (final git in _repositories) {
+            _sessionOf(git).treeView = tree;
+          }
+        });
+        widget.onTreeViewChanged?.call(tree);
+      },
+    );
     return SizedBox(
       height: 30,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Row(
+        // The icons as far in as the card's other controls.
+        padding: const EdgeInsets.symmetric(horizontal: Islands.inset - 4),
+        child: GiveWayRow(
           children: [
-            IdeActionButton(
-              icon: Codicons.refresh,
-              tooltip: l10n.commonRefresh,
-              onPressed: () => unawaited(
-                _run(() async {
-                  for (final git in _repositories) {
-                    await git.refresh(force: true);
-                  }
-                }),
+            GiveWay(
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IdeActionButton(
+                    icon: Codicons.refresh,
+                    tooltip: l10n.commonRefresh,
+                    onPressed: () => unawaited(
+                      _run(() async {
+                        for (final git in _repositories) {
+                          await git.refresh(force: true);
+                        }
+                      }),
+                    ),
+                  ),
+                  IdeActionButton(
+                    icon: Codicons.discard,
+                    tooltip: l10n.gitCommitRollback,
+                    onPressed: _rollbackTargets.isEmpty
+                        ? null
+                        : () => unawaited(() async {
+                            for (final (git, files) in _rollbackTargets) {
+                              await _rollback(git, files);
+                            }
+                          }()),
+                  ),
+                  IdeActionButton(
+                    icon: Codicons.gitStash,
+                    tooltip: l10n.gitStashChangesTitle,
+                    onPressed: git == null || rows.isEmpty
+                        ? null
+                        : () => unawaited(_stash(git)),
+                  ),
+                  IdeActionButton(
+                    icon: Codicons.diff,
+                    tooltip: l10n.gitCommitShowDiff,
+                    // A click shows it in the log's place; this, in the editor.
+                    onPressed: focused is _FileRow
+                        ? () => unawaited(_show(focused, editor: true))
+                        : null,
+                  ),
+                  const SizedBox(width: 4),
+                  IdeActionButton(
+                    icon: Codicons.expandAll,
+                    tooltip: l10n.gitCommitExpandAll,
+                    onPressed: () => setState(() {
+                      for (final git in _repositories) {
+                        _sessionOf(git).collapsedFolders.clear();
+                      }
+                    }),
+                  ),
+                  IdeActionButton(
+                    icon: Codicons.collapseAll,
+                    tooltip: l10n.gitCommitCollapseAll,
+                    onPressed: _collapseAll,
+                  ),
+                  IdeActionButton(
+                    icon: Codicons.eyeClosed,
+                    tooltip: l10n.gitCommitShowIgnored,
+                    checked: _session.showIgnored,
+                    onPressed: () => setState(() {
+                      final show = !_session.showIgnored;
+                      for (final git in _repositories) {
+                        _sessionOf(git).showIgnored = show;
+                      }
+                    }),
+                  ),
+                ],
               ),
             ),
-            IdeActionButton(
-              icon: Codicons.discard,
-              tooltip: l10n.gitCommitRollback,
-              onPressed: _rollbackTargets.isEmpty
-                  ? null
-                  : () => unawaited(() async {
-                      for (final (git, files) in _rollbackTargets) {
-                        await _rollback(git, files);
-                      }
-                    }()),
-            ),
-            IdeActionButton(
-              icon: Codicons.gitStash,
-              tooltip: l10n.gitStashChangesTitle,
-              onPressed: git == null || rows.isEmpty
-                  ? null
-                  : () => unawaited(_stash(git)),
-            ),
-            IdeActionButton(
-              icon: Codicons.diff,
-              tooltip: l10n.gitCommitShowDiff,
-              // A click shows it in the log's place; this, in the editor.
-              onPressed: focused is _FileRow
-                  ? () => unawaited(_show(focused, editor: true))
-                  : null,
-            ),
-            const SizedBox(width: 4),
-            IdeActionButton(
-              icon: Codicons.folder,
-              tooltip: l10n.gitCommitGroupByDirectory,
-              checked: byDirectory,
-              onPressed: () {
-                setState(() {
-                  for (final git in _repositories) {
-                    _sessionOf(git).treeView = !byDirectory;
-                  }
-                });
-                widget.onTreeViewChanged?.call(!byDirectory);
-              },
-            ),
-            IdeActionButton(
-              icon: Codicons.expandAll,
-              tooltip: l10n.gitCommitExpandAll,
-              onPressed: () => setState(() {
-                for (final git in _repositories) {
-                  _sessionOf(git).collapsedFolders.clear();
-                }
-              }),
-            ),
-            IdeActionButton(
-              icon: Codicons.collapseAll,
-              tooltip: l10n.gitCommitCollapseAll,
-              onPressed: _collapseAll,
-            ),
-            IdeActionButton(
-              icon: Codicons.eyeClosed,
-              tooltip: l10n.gitCommitShowIgnored,
-              checked: _session.showIgnored,
-              onPressed: () => setState(() {
-                final show = !_session.showIgnored;
-                for (final git in _repositories) {
-                  _sessionOf(git).showIgnored = show;
-                }
-              }),
-            ),
-            const Spacer(),
+            const GiveWay.fill(SizedBox()),
             if (_repositories.any((git) => git.busy))
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: IdeSpinning(
-                  Icon(
-                    Codicons.loading,
-                    size: 14,
-                    color: IdeListColors.description,
+              GiveWay(
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: IdeSpinning(
+                    Icon(
+                      Codicons.loading,
+                      size: 14,
+                      color: IdeListColors.description,
+                    ),
                   ),
                 ),
               ),
+            // As a commit's files in the log have it, named where there is
+            // room: a folder's icon among the others went unfound.
+            GiveWay(
+              viewSwitch(labels: true),
+              priority: 0,
+              compact: viewSwitch(labels: false),
+            ),
           ],
         ),
       ),
@@ -1919,14 +2015,6 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
       ),
       _GroupRow(:final kind, :final list) => Row(
         children: [
-          if (_changelist(list) case IdeGitChangelist(turn: true)) ...[
-            Icon(
-              Codicons.sparkle,
-              size: 14,
-              color: themeColors['textLink.foreground'],
-            ),
-            const SizedBox(width: 4),
-          ],
           Flexible(
             child: Text(
               switch (kind) {
@@ -2401,6 +2489,12 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
   /// The commit message's lines that fit in [height].
   static int lines(double height) => math.max(1, ((height - 8) / 20).floor());
 
+  /// The buttons under the message: [Islands.controlHeight] high.
+  static const _buttonPadding = EdgeInsets.symmetric(
+    horizontal: 12,
+    vertical: (Islands.controlHeight - 16 - 2) / 2,
+  );
+
   /// Under the tree: Amend, the commit message, and the buttons.
   Widget _commitArea(BuildContext context) {
     final l10n = context.l10n;
@@ -2415,7 +2509,12 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
     final busy = _committing || _repositories.any((git) => git.busy);
     final branch = git?.state?.head.branch;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      padding: const EdgeInsets.fromLTRB(
+        Islands.inset,
+        6,
+        Islands.inset,
+        Islands.inset,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -2521,6 +2620,11 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
                 minLines: lines(constraints.maxHeight),
                 maxLines: lines(constraints.maxHeight),
                 lineHeight: 20,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                radius: Islands.controlRadius,
                 validation: _shownValidation,
                 floatingValidation: true,
                 shortcuts: {
@@ -2563,42 +2667,50 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
             ),
           ),
           const SizedBox(height: 8),
-          LayoutBuilder(
-            builder: (context, constraints) => Row(
-              children: [
-                if (widget.commitMessage != null) ...[
-                  // Too narrow for its label beside the others: its icon.
-                  _generateButton(
-                    context,
-                    labeled: constraints.maxWidth >= 400,
-                  ),
-                  const SizedBox(width: 6),
-                ],
+          // Generate Commit Message as its icon alone where its label
+          // leaves the others no room.
+          GiveWayRow(
+            children: [
+              if (widget.commitMessage != null) ...[
+                GiveWay(
+                  _generateButton(context, labeled: true),
+                  priority: 0,
+                  compact: _generateButton(context, labeled: false),
+                ),
+                const GiveWay(SizedBox(width: 8)),
+              ],
+              GiveWay(
                 IdeButton(
                   label: l10n.gitCommitButton,
+                  padding: _buttonPadding,
+                  radius: Islands.controlRadius,
                   onPressed: busy ? null : () => unawaited(_commit()),
                 ),
-                const SizedBox(width: 6),
+              ),
+              const GiveWay(SizedBox(width: 8)),
+              GiveWay(
                 IdeButton(
                   label: l10n.gitCommitAndPush,
                   secondary: true,
+                  padding: _buttonPadding,
+                  radius: Islands.controlRadius,
                   onPressed: busy ? null : () => unawaited(_commit(push: true)),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    total == 0 ? '' : l10n.gitCommitSelected(checked, total),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.end,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: IdeListColors.description,
-                    ),
+              ),
+              const GiveWay(SizedBox(width: 8)),
+              GiveWay.fill(
+                Text(
+                  total == 0 ? '' : l10n.gitCommitSelected(checked, total),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: IdeListColors.description,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -2618,6 +2730,8 @@ class IdeGitCommitPanelState extends State<IdeGitCommitPanel>
       icon: generating ? Codicons.debugStop : Codicons.sparkle,
       label: labeled ? label : '',
       secondary: true,
+      padding: _buttonPadding,
+      radius: Islands.controlRadius,
       onPressed: () => unawaited(_generateMessage()),
     );
     return labeled ? button : IdeHover(message: label, child: button);
@@ -2646,8 +2760,10 @@ class _Check extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = themeColors;
     final on = value != false;
-    final accent =
-        colors.get('checkbox.selectBackground') ?? colors['button.background'];
+    // The button's color, not checkbox.selectBackground: that is for a
+    // box on a selected row, and defaults to the widgets' gray, which the
+    // check is all but lost on.
+    final accent = colors['button.background'];
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -2740,6 +2856,9 @@ class _Divider extends StatefulWidget {
   final ValueChanged<double> onResize;
   final VoidCallback onReset;
 
+  /// Its own height, between the tree and the message.
+  static const height = 5.0;
+
   @override
   State<_Divider> createState() => _DividerState();
 }
@@ -2804,7 +2923,7 @@ class _DividerState extends State<_Divider> {
         onVerticalDragCancel: _end,
         onDoubleTap: widget.onReset,
         child: SizedBox(
-          height: 5,
+          height: _Divider.height,
           child: Center(
             child: Container(
               height: active ? 3 : 1,
@@ -2844,33 +2963,18 @@ class _PanelTabState extends State<_PanelTab> {
     final colors = themeColors;
     final selected = widget.selected;
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+      child: IslandSegment(
+        selected: selected,
         onTap: widget.onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                width: 2,
-                color: selected
-                    ? colors['panelTitle.activeBorder']
-                    : Colors.transparent,
-              ),
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            widget.label,
-            style: TextStyle(
-              fontSize: 12,
-              color: selected || _hover
-                  ? colors['panelTitle.activeForeground']
-                  : colors['panelTitle.inactiveForeground'],
-            ),
+        child: Text(
+          widget.label,
+          style: TextStyle(
+            fontSize: 12,
+            color: selected || _hover
+                ? colors['panelTitle.activeForeground']
+                : colors['panelTitle.inactiveForeground'],
           ),
         ),
       ),

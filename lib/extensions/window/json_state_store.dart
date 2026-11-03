@@ -112,17 +112,32 @@ final class JsonStateStore {
   }
 }
 
+/// The temporary files [writeAtomically] made so far.
+int _temps = 0;
+
 /// Writes [contents] to [path] through a temporary file beside it renamed
 /// over it, so a reader never sees half of it.
 Future<void> writeAtomically(String path, String contents) async {
   final dir = Directory(p.dirname(path));
   await dir.create(recursive: true);
+  // Numbered as well: two writes of the same file in one tick of a coarse
+  // clock (Windows') would share it otherwise.
   final temp = File(
-    '$path.${pid}_${DateTime.now().microsecondsSinceEpoch}.tmp',
+    '$path.${pid}_${DateTime.now().microsecondsSinceEpoch}_${_temps++}.tmp',
   );
   try {
     await temp.writeAsString(contents, flush: true);
-    await temp.rename(path);
+    // Windows refuses it while another write of the file is renaming over
+    // it: tried again a moment later, a few times.
+    for (var tries = 1; ; tries++) {
+      try {
+        await temp.rename(path);
+        break;
+      } on FileSystemException {
+        if (!Platform.isWindows || tries == 5) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 10 * tries));
+      }
+    }
   } on Object {
     if (await temp.exists()) await temp.delete();
     rethrow;

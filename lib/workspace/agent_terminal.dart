@@ -13,6 +13,7 @@ import '../kernel/claude_code/claude_environment.dart';
 import '../kernel/claude_code/local_claude_io.dart';
 import '../network/network_proxy_io.dart';
 import '../theme/app_theme.dart';
+import 'islands.dart';
 import 'workspace.dart';
 
 /// What a Claude Code sets for what it runs, which another Claude Code
@@ -152,6 +153,7 @@ class AgentTerminalPane extends StatefulWidget {
     this.leading,
     this.trailing,
     this.inset = 12,
+    this.border,
   });
 
   final AgentTerminals terminals;
@@ -162,6 +164,9 @@ class AgentTerminalPane extends StatefulWidget {
   final Widget? leading;
   final Widget? trailing;
   final double inset;
+
+  /// Its card's outline: [Islands.border] by default.
+  final Color? border;
 
   @override
   State<AgentTerminalPane> createState() => _AgentTerminalPaneState();
@@ -209,8 +214,10 @@ class _AgentTerminalPaneState extends State<AgentTerminalPane> {
           ),
         ),
         Expanded(
-          child: ColoredBox(
+          // On a card, as the chat is, its foot's row left empty under it.
+          child: Island(
             color: const Color(0xFF050505),
+            borderColor: widget.border,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 0, 0),
               child: ListenableBuilder(
@@ -229,6 +236,7 @@ class _AgentTerminalPaneState extends State<AgentTerminalPane> {
             ),
           ),
         ),
+        const SizedBox(height: Islands.belowHeight),
       ],
     );
   }

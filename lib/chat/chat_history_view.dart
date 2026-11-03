@@ -33,6 +33,7 @@ import 'user_message_style.dart';
 import 'widgets/chat_item_view.dart';
 import 'widgets/chat_minimap.dart';
 import 'widgets/edge_fade_mask.dart';
+import 'widgets/own_selection.dart';
 import 'widgets/content_image.dart' show ChatImage, ChatImages;
 import 'widgets/fold_line.dart';
 import 'widgets/hover_builder.dart';
@@ -53,6 +54,7 @@ class ChatHistoryView extends StatefulWidget {
     this.onOpenAgent,
     this.onSetGoal,
     this.onFindClosed,
+    this.after,
   });
 
   /// The conversation shown: a session's, or a subagent's.
@@ -76,6 +78,11 @@ class ChatHistoryView extends StatefulWidget {
 
   /// Where the focus goes once its find bar closes (see [find]).
   final VoidCallback? onFindClosed;
+
+  /// What shows under item [index], after its turn's footer, not of the
+  /// conversation itself (the conversations asked beside it there); none
+  /// for most.
+  final Widget? Function(int index)? after;
 
   @override
   State<ChatHistoryView> createState() => _ChatHistoryViewState();
@@ -108,6 +115,11 @@ typedef _LeftAt = ({
 
 /// Each conversation's, by its feed; none while at the end, followed.
 final Expando<_LeftAt> _leftAt = Expando('chat history left at');
+
+/// The conversations found long ([_ChatHistoryViewState._long]), by their
+/// feeds: one shown again has its minimap (and the room for it) from its
+/// first frame, not a few frames on, once it is laid out.
+final Expando<bool> _longFeeds = Expando('chat history long');
 
 class _ChatHistoryViewState extends State<ChatHistoryView>
     with TickerProviderStateMixin, ChatKeyTarget {
@@ -394,6 +406,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   }
 
   void _seeItems() {
+    _itemCountSeen = _feed.itemCount;
     _seenItems = _contentCount;
     _statusShown = _statusShowing;
     _appearing.clear();
@@ -433,6 +446,66 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     }
     _seenItems = count;
     _statusShown = statusShown;
+  }
+
+  // --- Words streaming in --------------------------------------------------
+  //
+  // Most of a turn's changes are a few more characters in its last item, or
+  // its status row's time and tokens: many a second, from each session
+  // streaming. Shown one by one, a long conversation's view is built anew
+  // for each, and a dozen at once take the frames from everything else.
+  // Such changes show together, at most every [_wordsGap]; the first after
+  // a pause at once. An item coming or going, the status row showing or
+  // not, a turn starting or ending, the earlier history coming: at once,
+  // as before (items fade in, the status row hands over to them, and a
+  // sent message's reply stops at its start, from what each change shows).
+  // What came meanwhile is in the feed already: only showing it waits.
+
+  /// The least time between showings of streamed words: while watched (at
+  /// the end of the conversation, the app in front), and otherwise.
+  static const _wordsGap = Duration(milliseconds: 66);
+  static const _wordsGapUnwatched = Duration(milliseconds: 250);
+
+  /// Running from the last showing of streamed words until the next may
+  /// come; [_wordsWaiting] when words came meanwhile, to show at its end.
+  Timer? _wordsCooldown;
+  bool _wordsWaiting = false;
+
+  /// The feed's items, as last seen: a change that keeps their number
+  /// (and the status row as it was) only streams words.
+  int _itemCountSeen = 0;
+
+  bool get _watched =>
+      _atBottom &&
+      switch (SchedulerBinding.instance.lifecycleState) {
+        null || AppLifecycleState.resumed => true,
+        _ => false,
+      };
+
+  /// Shows a change at once; streamed words waiting show with it.
+  void _showNow() {
+    _wordsWaiting = false;
+    setState(() {});
+  }
+
+  /// Shows streamed words now, or at the end of the cooldown under way.
+  void _showWords() {
+    if (_wordsCooldown != null) {
+      _wordsWaiting = true;
+      return;
+    }
+    setState(() {});
+    _wordsCooldown = Timer(
+      _watched ? _wordsGap : _wordsGapUnwatched,
+      _wordsCooledDown,
+    );
+  }
+
+  void _wordsCooledDown() {
+    _wordsCooldown = null;
+    if (!mounted || !_wordsWaiting) return;
+    _wordsWaiting = false;
+    _showWords();
   }
 
   double _editorHeight = 0;
@@ -506,9 +579,11 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   bool _contentBelow = false;
   bool _contentAbove = false;
 
-  /// Pointer held down in the list (drag, scrollbar) or a wheel event just
-  /// arrived: only then does a scroll change whether we stick to the bottom.
-  int _pointersDown = 0;
+  /// The devices with a button held down in the list (drag, scrollbar), by
+  /// [PointerEvent.device]. Held, or a wheel event just arrived: only then
+  /// does a scroll change whether we stick to the bottom.
+  final Set<int> _pressedDevices = {};
+  int get _pointersDown => _pressedDevices.length;
 
   late final _ChatSelectionDelegate _selectionDelegate = _ChatSelectionDelegate(
     locate: _locateItemPoint,
@@ -583,6 +658,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     FrameWatch.notes[this] = _frameNote;
     _wasLive = _feed.isStreaming;
     _prependedSeen = _session?.prependedCount ?? 0;
+    _long = _longFeeds[_feed] ?? false;
     _refold();
     _seeItems();
     _resumeEditing();
@@ -680,7 +756,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   void didUpdateWidget(ChatHistoryView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.feed != widget.feed) {
-      _long = false;
+      _long = _longFeeds[widget.feed] ?? false;
       _noteLeft(oldWidget.feed);
       _shownFirst = null;
       oldWidget.feed.removeListener(_handleSessionChanged);
@@ -759,6 +835,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     FrameWatch.notes.remove(this);
     _noteLeft(_feed);
     _steady.dispose();
+    _wordsCooldown?.cancel();
     _feed.removeListener(_handleSessionChanged);
     _find
       ..removeListener(_findChanged)
@@ -814,8 +891,9 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   // its first item is pressed. That bar is not a row of the list, so no index
   // is moved by it; the room for it is the list's top padding.
 
-  /// The list's room above its first item, and the bar's height after it.
-  static const _chatTopPadding = 20.0;
+  /// The list's room above its first item (the composer's under its last,
+  /// [Islands.inset]), and the bar's height after it.
+  static const _chatTopPadding = 12.0;
   static const _earlierBarHeight = 40.0;
 
   /// How near the top the list is scrolled before the earlier turns are read.
@@ -826,17 +904,37 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _ => null,
   };
 
-  /// There were earlier turns to read: the room for the bar stays, as it
-  /// goes with the last of them.
-  bool _earlierSeen = false;
+  /// There are earlier turns to read, or they are being read: room for
+  /// the bar.
+  bool get _earlierRoom => switch (_session) {
+    final session? => session.hasEarlierHistory || session.loadingEarlier,
+    null => false,
+  };
 
-  bool get _earlierRoom {
+  /// Whether the list was last laid out with room for the bar, and for
+  /// whose turns.
+  (ChatSession?, bool) _earlierRoomLaidOut = (null, false);
+
+  /// [_earlierRoom], what is in the list kept where it is as the room comes
+  /// or goes (the last of the earlier turns read): scrolled by as much,
+  /// unless at the top, where the bar goes with it.
+  bool _keepEarlierRoom() {
     final session = _session;
-    if (session != null &&
-        (session.hasEarlierHistory || session.loadingEarlier)) {
-      _earlierSeen = true;
+    final room = _earlierRoom;
+    final (laidOutFor, laidOut) = _earlierRoomLaidOut;
+    _earlierRoomLaidOut = (session, room);
+    if (!identical(laidOutFor, session) || laidOut == room) return room;
+    if (_scrollController.hasClients) {
+      final position = _scrollController.position;
+      if (position.hasPixels && position.pixels > 0) {
+        position.correctBy(
+          room
+              ? _earlierBarHeight
+              : -math.min(_earlierBarHeight, position.pixels),
+        );
+      }
     }
-    return _earlierSeen;
+    return room;
   }
 
   /// Reading them brought nothing: not tried again until asked to.
@@ -1187,7 +1285,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   static const _scrollbarGutter = 24.0;
 
   void _handlePointerDown(PointerDownEvent event) {
-    _pointersDown++;
+    _pressedDevices.add(event.device);
     // What a right click is on, found as it presses: the selection's menu
     // builds as it comes up, when nothing may be hit tested.
     _linkMenu = event.buttons & kSecondaryMouseButton != 0
@@ -1208,13 +1306,17 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     if (list != null && list.hasSize) {
       final right = list.localToGlobal(Offset(list.size.width, 0)).dx;
       onBar = !_minimapShown && event.position.dx >= right - _scrollbarGutter;
-      _selectionDelegate.suspended = onBar;
     }
+    // Nor one in what selects on its own (an edit card's editor): the two
+    // selections are apart, and the focus is its.
+    final own = OwnSelection.pressedIn(event);
+    _selectionDelegate.suspended = onBar || own;
     if ((_pressOnMinimap || onBar) && event.buttons == kPrimaryMouseButton) {
       _scrub(true);
     }
     _dragFrom =
         _pressInEditor ||
+            own ||
             _pressOnSticky ||
             _pressOnMinimap ||
             event.kind != PointerDeviceKind.mouse ||
@@ -1225,7 +1327,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _pressOnMinimap = false;
     if (_pressInEditor) {
       _pressInEditor = false;
-    } else {
+    } else if (!own) {
       _selectionFocusNode.requestFocus();
     }
     _pressFocused = false;
@@ -1250,7 +1352,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   }
 
   void _handlePointerUp(PointerEvent event) {
-    _pointersDown--;
+    if (!_pressedDevices.remove(event.device)) return;
     final from = _dragFrom;
     _dragFrom = null;
     if (from != null &&
@@ -1280,6 +1382,15 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         ..extending = false
         ..suspended = false;
     }
+  }
+
+  /// A device moving with no button down, though its release never came
+  /// here (let go outside the window, or as another window took the
+  /// focus): released now. Held on, its drag's end went on being put back
+  /// under the pointer at each wheel step (see [_scheduleDragReselect]), and
+  /// scrolling selected text.
+  void _handlePointerHover(PointerHoverEvent event) {
+    if (_pressedDevices.contains(event.device)) _handlePointerUp(event);
   }
 
   /// Scrolls while a drag selection is held near or past an edge, as the
@@ -1406,6 +1517,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         _long ||
         position.maxScrollExtent - position.minScrollExtent >=
             position.viewportDimension * ChatMinimap.longAfter;
+    if (long) _longFeeds[_feed] = true;
     if (below != _contentBelow || above != _contentAbove || long != _long) {
       setState(() {
         _contentBelow = below;
@@ -1503,9 +1615,21 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       _toReplyStart = true;
     }
     if (ended) _toReplyStart = false;
+    final count = _feed.itemCount;
+    final wordsOnly =
+        _feed.isStreaming &&
+        !startedStreaming &&
+        moved == 0 &&
+        count == _itemCountSeen &&
+        _statusShowing == _statusShown;
+    _itemCountSeen = count;
     _itemsCame();
     _scheduleStickyUpdate();
-    setState(() {});
+    if (wordsOnly) {
+      _showWords();
+    } else {
+      _showNow();
+    }
     _wantEarlier();
   }
 
@@ -1599,8 +1723,12 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
           layer.localToGlobal(Offset.zero).dy;
       return _sticks ? math.max(top, inset) : top;
     }
+    // Not findRenderObject: painted in the frame whose layout dropped the
+    // placeholder's item, its element is inactive (and its box detached)
+    // until the frame ends.
     final placeholder =
-        _editorPlaceholderKey.currentContext?.findRenderObject() as RenderBox?;
+        (_editorPlaceholderKey.currentContext as Element?)?.renderObject
+            as RenderBox?;
     if (placeholder != null && placeholder.attached && placeholder.hasSize) {
       final top =
           placeholder.localToGlobal(Offset.zero).dy -
@@ -2028,7 +2156,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       _foldOpen.removeWhere((key, _) => key.$2 > index);
       _unfoldedTurns.clear();
     });
-    _feed.editMessage(index, message);
+    _feed.editMessage(index, message, from: UserPlace.computer);
   }
 
   /// Row [index] of the list: [child] in the column, [gap] below the row
@@ -2100,7 +2228,23 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     }
     final row = _rowAt(index);
     final folds = [?row.work, ?row.steps];
-    final footer = _turnFooter(index) ?? _liveFooter(index);
+    final footer = switch ((
+      _turnFooter(index) ?? _liveFooter(index),
+      widget.after?.call(index),
+    )) {
+      (final footer, null) => footer,
+      (null, final after?) => Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: after,
+      ),
+      (final footer?, final after?) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          footer,
+          Padding(padding: const EdgeInsets.only(top: 10), child: after),
+        ],
+      ),
+    };
     // Folded away (what the turn under way has written showing still).
     if (folds.isEmpty && !row.item) {
       return footer == null
@@ -2446,6 +2590,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         onPointerDown: _handlePointerDown,
         onPointerUp: _handlePointerUp,
         onPointerCancel: _handlePointerUp,
+        onPointerHover: _handlePointerHover,
         // Runs before the list handles the signal (that is resolved after
         // every target has seen it).
         onPointerSignal: (event) {
@@ -2535,7 +2680,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                                           padding: EdgeInsets.fromLTRB(
                                             _gutter,
                                             _chatTopPadding +
-                                                (_earlierRoom
+                                                (_keepEarlierRoom()
                                                     ? _earlierBarHeight
                                                     : 0),
                                             _gutter,
@@ -2543,7 +2688,9 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                                           ),
                                           itemBuilder: (context, index) =>
                                               _isHidden(index) &&
-                                                  index != _editingIndex
+                                                  index != _editingIndex &&
+                                                  widget.after?.call(index) ==
+                                                      null
                                               ? _hiddenRow(index)
                                               : _row(
                                                   index,
@@ -2581,9 +2728,6 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                                   ),
                                 ),
                               ),
-                              if (_editingIndex ?? _closingIndex
-                                  case final index?)
-                                _buildEditorLayer(index),
                               Positioned(
                                 right: 0,
                                 left: 0,
@@ -2602,10 +2746,19 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                     ),
                   ),
                 ),
+                // Over the list, outside its selection: the editor's presses,
+                // keys and right clicks are its own, its text selected by it
+                // alone (the history's selection took drags begun in it, and
+                // ⌘C with nothing selected in it copied what the history had).
+                if (_editingIndex ?? _closingIndex case final index?)
+                  _buildEditorLayer(index),
                 // Beside the list, not over it: a press on it selects nothing.
                 if (widget.minimap)
                   Positioned.fill(
                     child: ChatMinimap(
+                      // Another conversation's: its glass not sprung over
+                      // from where the last one's was.
+                      key: ObjectKey(_feed),
                       rowCount: _feed.itemCount,
                       rowAt: _minimapRow,
                       span: _spanInView,

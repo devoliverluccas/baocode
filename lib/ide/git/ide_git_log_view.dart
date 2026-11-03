@@ -15,10 +15,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
-import 'package:bao_editor/monaco/flutter/diff_editor_model.dart'
-    show DiffHighlight;
 
 import '../../base/give_way_row.dart';
+import '../../base/mouse_navigation.dart';
 import '../../base/smooth_scroll.dart';
 import '../../base/shown_when_ready.dart';
 import '../../chat/composer/composer_files.dart';
@@ -27,6 +26,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/codicons.dart';
 import '../../theme/material_file_icons.dart';
 import '../../theme/workbench_theme.dart';
+import '../../workspace/islands.dart';
 import '../file_service.dart';
 import '../ide_button.dart';
 import '../ide_code_diff.dart';
@@ -50,6 +50,7 @@ import 'git_model.dart';
 import 'git_partial.dart';
 import 'git_repository.dart';
 import 'git_service.dart';
+import 'ide_git_list_tree_switch.dart';
 import 'ide_git_rebase_dialog.dart';
 import 'ide_git_ref_labels.dart';
 import 'ide_scm_view.dart';
@@ -277,25 +278,6 @@ class IdeGitLogController extends ChangeNotifier {
   set filesAsTree(bool value) {
     if (value == _filesAsTree) return;
     _filesAsTree = value;
-    notifyListeners();
-  }
-
-  /// Each file's added and deleted lines beside it.
-  bool _sizesShown = false;
-  bool get sizesShown => _sizesShown;
-  set sizesShown(bool value) {
-    if (value == _sizesShown) return;
-    _sizesShown = value;
-    notifyListeners();
-  }
-
-  /// The branches that have the commit selected, under its references:
-  /// shown until hidden, for every commit.
-  bool _branchesShown = true;
-  bool get branchesShown => _branchesShown;
-  set branchesShown(bool value) {
-    if (value == _branchesShown) return;
-    _branchesShown = value;
     notifyListeners();
   }
 
@@ -598,10 +580,12 @@ class IdeGitLogView extends StatefulWidget {
     this.overlay,
     this.overlayTabs,
     this.onCloseOverlay,
+    this.onReopenOverlay,
     this.onAddToChat,
     this.worktrees = const IdeGitWorktreeChoice(),
     this.background,
     this.border,
+    this.islands = false,
     this.ai,
     this.onAsk,
     this.onFixup,
@@ -646,6 +630,10 @@ class IdeGitLogView extends StatefulWidget {
   final Widget? overlayTabs;
   final VoidCallback? onCloseOverlay;
 
+  /// The mouse's forward button, the overlay closed: shows it again, and
+  /// says whether there was one.
+  final bool Function()? onReopenOverlay;
+
   /// Puts files in the chat's composer; not offered when null.
   final ValueChanged<List<ComposerFile>>? onAddToChat;
 
@@ -654,6 +642,11 @@ class IdeGitLogView extends StatefulWidget {
 
   /// Behind it, and the lines between its parts; the editor's and the
   /// panel's when null.
+  /// Whether its parts are cards of [background] on what is under it
+  /// (see [Island]): the log, with its toolbar, and the details (the
+  /// commit's, or the changes to commit), a gap between them.
+  final bool islands;
+
   final Color? background;
   final Color? border;
 
@@ -692,6 +685,52 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
   void didUpdateWidget(IdeGitLogView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(_emailOf, _git)) _readEmail();
+    if (oldWidget.overlay != null && widget.overlay == null) {
+      _closed = _overlayClosed;
+    }
+  }
+
+  /// What the mouse's forward button shows again: the changes closed last,
+  /// the overlay's ([_overlayClosed]) or the log's own (with the row they
+  /// were of); none once others show.
+  Object? _closed;
+  String? _closedOf;
+  static const _overlayClosed = #overlay;
+
+  /// The mouse's back button: the changes shown close.
+  bool _mouseBack() {
+    if (widget.overlay != null) {
+      if (widget.onCloseOverlay case final close?) {
+        close();
+        return true;
+      }
+    }
+    if (_log.diff case final diff?) {
+      _closeDiff(diff);
+      return true;
+    }
+    return false;
+  }
+
+  void _closeDiff(IdeGitLogDiff diff) {
+    _closed = diff;
+    _closedOf = _log.selected;
+    _log.closeDiff();
+  }
+
+  /// The mouse's forward button: the changes closed last show again.
+  bool _mouseForward() {
+    if (widget.overlay != null || _log.diff != null) return false;
+    switch (_closed) {
+      case _overlayClosed:
+        _closed = null;
+        return widget.onReopenOverlay?.call() ?? false;
+      case final IdeGitLogDiff diff when _closedOf == _log.selected:
+        _closed = null;
+        _log.showDiff(diff.files, diff.index, focus: diff.focus);
+        return true;
+    }
+    return false;
   }
 
   @override
@@ -728,10 +767,11 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
   @override
   Widget build(BuildContext context) {
     final git = _git;
-    return ColoredBox(
-      color: _background,
+    Widget card(Widget child) => widget.islands ? _firstCard(child) : child;
+    final view = ColoredBox(
+      color: widget.islands ? Colors.transparent : _background,
       child: git == null
-          ? _overlay() ?? widget.changes
+          ? card(_overlay() ?? widget.changes)
           : ListenableBuilder(
               listenable: Listenable.merge([
                 git,
@@ -747,10 +787,15 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
                 return git.state == null
                     // Not a repository (yet): Source Control's welcome, but
                     // for a change opened.
-                    ? _overlay() ?? widget.changes
+                    ? card(_overlay() ?? widget.changes)
                     : _page(git, git.state!);
               },
             ),
+    );
+    return MouseNavigation(
+      onBack: _mouseBack,
+      onForward: _mouseForward,
+      child: view,
     );
   }
 
@@ -816,7 +861,118 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
   String _worktreeName(IdeGitRepository git, IdeGitWorktree worktree) =>
       git.service.pathContext.basename(worktree.path);
 
-  Widget _layout(IdeGitRepository git, IdeGitState state) => Column(
+  /// The card along the top, under a strip's tabs: its top left corner
+  /// square while their first is in front (see [IslandCorner]).
+  Widget _firstCard(Widget child) => IslandCornerRadius(
+    square: IslandCorner.of(context),
+    builder: (context, topLeft, child) => Island(
+      color: _background,
+      borderColor: _border,
+      topLeft: topLeft,
+      child: child!,
+    ),
+    child: child,
+  );
+
+  Widget _layout(IdeGitRepository git, IdeGitState state) =>
+      widget.islands ? _islandLayout(git, state) : _flatLayout(git, state);
+
+  /// [_flatLayout]'s parts on cards: the toolbar and the log on one, the
+  /// details on another, beside it once wide, else under it.
+  Widget _islandLayout(IdeGitRepository git, IdeGitState state) =>
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= IdeGitLogView.wideWidth;
+          final tree = wide && _branchTreeFits(constraints.maxWidth)
+              ? math.min(_log.branchTreeWidth, constraints.maxWidth * .3)
+              : null;
+          final main = _main(git, state);
+          Widget card(Widget child, {bool first = false}) => first
+              ? _firstCard(child)
+              : Island(color: _background, borderColor: _border, child: child);
+          final log = card(
+            first: true,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _toolbar(git, state, width: constraints.maxWidth),
+                Container(height: 1, color: _border),
+                if (git.busy)
+                  SizedBox(
+                    height: 2,
+                    child: LinearProgressIndicator(
+                      minHeight: 2,
+                      backgroundColor: Colors.transparent,
+                      color: themeColors['progressBar.background'],
+                    ),
+                  ),
+                Expanded(
+                  child: tree == null
+                      ? main
+                      : Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(width: tree, child: _branchPane(git)),
+                            _Sash(
+                              vertical: false,
+                              color: _border,
+                              size: tree,
+                              onResize: _log.resizeBranchTree,
+                            ),
+                            Expanded(child: main),
+                          ],
+                        ),
+                ),
+              ],
+            ),
+          );
+          final details = card(_details(git, state));
+          if (wide) {
+            final width = math.min(
+              _log.detailsWidth,
+              constraints.maxWidth - 360 - (tree ?? 0),
+            );
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: log),
+                _Sash(
+                  vertical: false,
+                  color: Colors.transparent,
+                  size: width,
+                  after: true,
+                  gap: true,
+                  onResize: (width) => _log.resizeDetails(width: width),
+                ),
+                SizedBox(width: width, child: details),
+              ],
+            );
+          }
+          // Half, or room for the commit panel's message and buttons under
+          // its files.
+          final height = math.min(
+            _log.detailsHeight ?? math.max(constraints.maxHeight / 2, 340),
+            constraints.maxHeight * .75,
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: log),
+              _Sash(
+                vertical: true,
+                color: Colors.transparent,
+                size: height,
+                after: true,
+                gap: true,
+                onResize: (height) => _log.resizeDetails(height: height),
+              ),
+              SizedBox(height: height, child: details),
+            ],
+          );
+        },
+      );
+
+  Widget _flatLayout(IdeGitRepository git, IdeGitState state) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       _toolbar(git, state),
@@ -902,88 +1058,110 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
 
   // --- Toolbar -------------------------------------------------------------
 
-  Widget _toolbar(IdeGitRepository git, IdeGitState state) => LayoutBuilder(
-    builder: (context, constraints) {
-      final compact = constraints.maxWidth < _compactToolbar;
-      final filters = _filters(git);
-      if (!compact) {
-        return SizedBox(
-          height: 36,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Row(
+  /// [width]: the page's, where the toolbar is narrower than it (on the
+  /// log's card, beside the details'); whether the branch tree has room
+  /// goes by it.
+  Widget _toolbar(IdeGitRepository git, IdeGitState state, {double? width}) =>
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < _compactToolbar;
+          final filters = _filters(git);
+          final islands = widget.islands;
+          if (!compact) {
+            return SizedBox(
+              height: islands ? Islands.controlHeight + 2 * 8 : 36,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: islands ? Islands.inset - 2 : 8,
+                  vertical: islands ? 8 : 0,
+                ),
+                child: Row(
+                  children: [
+                    if ((width ?? constraints.maxWidth) >=
+                        _branchTreeWidth) ...[
+                      IdeActionButton(
+                        icon: _log.branchTreeShown
+                            ? Codicons.layoutSidebarLeft
+                            : Codicons.layoutSidebarLeftOff,
+                        tooltip: _log.branchTreeShown
+                            ? context.l10n.gitHideBranches
+                            : context.l10n.gitShowBranches,
+                        checked: _log.branchTreeShown,
+                        onPressed: () =>
+                            _log.branchTreeShown = !_log.branchTreeShown,
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            ...filters.take(2),
+                            SizedBox(width: 240, child: _search(git)),
+                            const SizedBox(width: 6),
+                            ...filters.skip(2),
+                          ],
+                        ),
+                      ),
+                    ),
+                    _clearButton(git),
+                    const SizedBox(width: 8),
+                    ..._actions(git, state, compact: false),
+                  ],
+                ),
+              ),
+            );
+          }
+          // Narrow (the side panel): the search and the actions, then the
+          // filters under them.
+          return Padding(
+            // On a card: the search as far in as the card's other
+            // controls, the filters' text under its.
+            padding: islands
+                ? const EdgeInsets.fromLTRB(
+                    Islands.inset - 4,
+                    10,
+                    Islands.inset - 4,
+                    4,
+                  )
+                : const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (constraints.maxWidth >= _branchTreeWidth) ...[
-                  IdeActionButton(
-                    icon: _log.branchTreeShown
-                        ? Codicons.layoutSidebarLeft
-                        : Codicons.layoutSidebarLeftOff,
-                    tooltip: _log.branchTreeShown
-                        ? context.l10n.gitHideBranches
-                        : context.l10n.gitShowBranches,
-                    checked: _log.branchTreeShown,
-                    onPressed: () =>
-                        _log.branchTreeShown = !_log.branchTreeShown,
-                  ),
-                  const SizedBox(width: 6),
-                ],
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
+                SizedBox(
+                  height: islands ? Islands.controlHeight : 34,
+                  child: Padding(
+                    padding: EdgeInsets.only(left: islands ? 4 : 0),
                     child: Row(
                       children: [
-                        ...filters.take(2),
-                        SizedBox(width: 240, child: _search(git)),
-                        const SizedBox(width: 6),
-                        ...filters.skip(2),
+                        Expanded(child: _search(git)),
+                        const SizedBox(width: 4),
+                        ..._actions(git, state, compact: true),
                       ],
                     ),
                   ),
                 ),
-                _clearButton(git),
-                const SizedBox(width: 8),
-                ..._actions(git, state, compact: false),
+                if (islands) const SizedBox(height: 4),
+                SizedBox(
+                  height: 28,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(children: filters),
+                        ),
+                      ),
+                      _clearButton(git),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ),
-        );
-      }
-      // Narrow (the side panel): the search and the actions, then the
-      // filters under them.
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(
-              height: 34,
-              child: Row(
-                children: [
-                  Expanded(child: _search(git)),
-                  const SizedBox(width: 4),
-                  ..._actions(git, state, compact: true),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 28,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(children: filters),
-                    ),
-                  ),
-                  _clearButton(git),
-                ],
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       );
-    },
-  );
 
   /// The branch's button: where the branch popup opens.
   final GlobalKey _branchButton = GlobalKey();
@@ -1025,6 +1203,11 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
       controller: _log.search,
       focusNode: _log.searchFocus,
       placeholder: l10n.gitLogSearch,
+      // On a card: as high as its buttons, rounded as they are.
+      padding: widget.islands
+          ? const EdgeInsets.symmetric(horizontal: 10, vertical: 5)
+          : const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      radius: widget.islands ? Islands.controlRadius : 4,
       onChanged: (text) {
         _searchDebounce?.cancel();
         _searchDebounce = Timer(
@@ -1766,7 +1949,7 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
         onAsk: widget.onAsk,
         onClose: () {
           final focused = diff.focus;
-          _log.closeDiff();
+          _closeDiff(diff);
           // Back to the table, where the keys were.
           if (!focused) return;
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -2041,6 +2224,7 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
                 padding: const EdgeInsets.only(right: 8),
                 child: GiveWayRow(
                   children: [
+                    ..._labels(row, foreground),
                     GiveWay.fill(
                       _commitHover(
                         row,
@@ -2062,9 +2246,8 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
                           ),
                         ),
                       ),
-                      minWidth: 60,
+                      minWidth: 40,
                     ),
-                    ..._labels(row, foreground),
                   ],
                 ),
               ),
@@ -2189,17 +2372,17 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
           child: child,
         );
 
-  /// The references' labels at the row's end, as JetBrains IDEs align
-  /// them, the subject cut short before them: short of room the tags give
-  /// way first, to their icons alone, then gone; then the remote branches;
-  /// the branches last.
+  /// The references' labels before the subject, which is cut short first,
+  /// they mattering more: short of room still the tags give way first, to
+  /// their icons alone, then gone; then the remote branches; the branches
+  /// last.
   List<GiveWay> _labels(IdeGraphRow row, Color foreground) {
     final labels = ideGitRefLabels(row.commit.references);
     return [
       for (final (index, label) in labels.indexed)
         GiveWay(
           Padding(
-            padding: EdgeInsets.only(left: index == 0 ? 12 : 10),
+            padding: const EdgeInsets.only(right: 10),
             child: IdeGitRefLabelView(
               label,
               foreground: foreground,
@@ -2210,7 +2393,7 @@ class IdeGitLogViewState extends State<IdeGitLogView> {
             ),
           ),
           compact: Padding(
-            padding: EdgeInsets.only(left: index == 0 ? 12 : 4),
+            padding: const EdgeInsets.only(right: 6),
             child: IdeGitRefLabelView(label, compact: true),
           ),
           priority:
@@ -2961,6 +3144,28 @@ class _Offers extends StatelessWidget {
   );
 }
 
+/// A commit message's [body] with its lines broken at ~72 columns joined
+/// again, to wrap at the panel's width: a line goes on the one before
+/// unless either is empty, or it starts indented, as a list's item or a
+/// quote, or as a trailer (`Co-Authored-By: …`).
+String ideGitUnwrapBody(String body) {
+  final own = RegExp(r'^(\s|[-*+>|]\s|\d+[.)]\s|[\w-]+: )');
+  final out = StringBuffer();
+  var previous = '';
+  for (final (index, line) in body.split('\n').indexed) {
+    if (index > 0) {
+      final join =
+          previous.trim().isNotEmpty &&
+          line.trim().isNotEmpty &&
+          !own.hasMatch(line);
+      out.write(join ? ' ' : '\n');
+    }
+    out.write(line);
+    previous = line;
+  }
+  return out.toString();
+}
+
 class _CommitDetails extends StatelessWidget {
   const _CommitDetails({
     super.key,
@@ -2998,7 +3203,9 @@ class _CommitDetails extends StatelessWidget {
     final foreground = IdeListColors.foreground;
     final message = commit.message.trim();
     final newline = message.indexOf('\n');
-    final body = newline < 0 ? '' : message.substring(newline + 1).trim();
+    final body = newline < 0
+        ? ''
+        : ideGitUnwrapBody(message.substring(newline + 1).trim());
     return FutureBuilder<List<IdeGitCommitChange>>(
       future: log.changesOf(git, commit.id),
       builder: (context, changes) {
@@ -3011,7 +3218,7 @@ class _CommitDetails extends StatelessWidget {
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -3019,36 +3226,7 @@ class _CommitDetails extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Center(
-                            child: _Offers(
-                              entries: [
-                                _copyItem(l10n.scmCopyCommitHash, commit.id),
-                              ],
-                              child: IdeHover(
-                                message: '${l10n.gitLogCopyHash}\n${commit.id}',
-                                child: MouseRegion(
-                                  cursor: SystemMouseCursors.click,
-                                  child: GestureDetector(
-                                    onTap: () => unawaited(
-                                      Clipboard.setData(
-                                        ClipboardData(text: commit.id),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      'commit: ${commit.shortId}',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: foreground,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          // The message, in a box of its own; edited in place.
+                          // The message; edited in place.
                           if (log.editingMessage == commit.id)
                             SelectionContainer.disabled(
                               child: _MessageEditor(
@@ -3059,77 +3237,57 @@ class _CommitDetails extends StatelessWidget {
                               ),
                             )
                           else
-                            Container(
-                              constraints: const BoxConstraints(maxHeight: 140),
-                              padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: border),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: SingleChildScrollView(
-                                      child: Text.rich(
-                                        TextSpan(
-                                          children: [
-                                            TextSpan(
-                                              text: commit.subject,
-                                              style: TextStyle(
-                                                color: foreground,
-                                              ),
-                                            ),
-                                            if (body.isNotEmpty)
-                                              TextSpan(
-                                                text: '\n$body',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: description,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          height: 1.45,
-                                        ),
+                            // Its subject alone; the whole in its hover.
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: IdeHover(
+                                    message: body.isEmpty
+                                        ? commit.subject
+                                        : '${commit.subject}\n\n$body',
+                                    child: Text(
+                                      commit.subject,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: foreground,
                                       ),
                                     ),
                                   ),
-                                  IdeActionButton(
-                                    icon: Codicons.copy,
-                                    tooltip: l10n.scmCopyCommitMessage,
-                                    size: 20,
-                                    iconSize: 14,
-                                    onPressed: () => unawaited(
-                                      Clipboard.setData(
-                                        ClipboardData(text: commit.message),
-                                      ),
+                                ),
+                                IdeActionButton(
+                                  icon: Codicons.copy,
+                                  tooltip: l10n.scmCopyCommitMessage,
+                                  size: 20,
+                                  iconSize: 14,
+                                  onPressed: () => unawaited(
+                                    Clipboard.setData(
+                                      ClipboardData(text: commit.message),
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          const SizedBox(height: 10),
-                          Text(
-                            l10n.gitLogAuthor,
-                            style: TextStyle(fontSize: 12, color: description),
-                          ),
                           const SizedBox(height: 6),
-                          Row(
+                          // Who, when and which, on one line where it fits.
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
-                              _Avatar(
-                                commit.author,
-                                commit.authorEmail,
-                                size: 36,
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _Offers(
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _Avatar(
+                                    commit.author,
+                                    commit.authorEmail,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Flexible(
+                                    child: _Offers(
                                       entries: [
                                         _copyItem(
                                           l10n.gitLogCopyName(commit.author),
@@ -3150,102 +3308,104 @@ class _CommitDetails extends StatelessWidget {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                            fontSize: 14,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w600,
                                             color: foreground,
                                           ),
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _formatDate(commit.date, seconds: true),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: description,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (commit.parentIds.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text.rich(
-                              TextSpan(
-                                children: [
-                                  TextSpan(text: l10n.gitLogParents),
-                                  for (final (index, parent)
-                                      in commit.parentIds.indexed) ...[
-                                    if (index > 0) const TextSpan(text: ', '),
-                                    TextSpan(
-                                      text: _short(parent),
-                                      style: TextStyle(
-                                        color:
-                                            themeColors['textLink.foreground'],
-                                      ),
-                                      recognizer: TapGestureRecognizer()
-                                        ..onTap = () => onSelect(parent),
-                                      mouseCursor: SystemMouseCursors.click,
-                                    ),
-                                  ],
+                                  ),
                                 ],
                               ),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: description,
+                              Text(
+                                _formatDate(commit.date, seconds: true),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: description,
+                                ),
                               ),
-                            ),
-                          ],
-                          const SizedBox(height: 8),
+                              _Offers(
+                                entries: [
+                                  _copyItem(l10n.scmCopyCommitHash, commit.id),
+                                ],
+                                child: IdeHover(
+                                  message:
+                                      '${l10n.gitLogCopyHash}\n${commit.id}',
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.click,
+                                    child: GestureDetector(
+                                      onTap: () => unawaited(
+                                        Clipboard.setData(
+                                          ClipboardData(text: commit.id),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'commit: ${commit.shortId}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: description,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (commit.parentIds.isNotEmpty)
+                                Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      TextSpan(text: l10n.gitLogParents),
+                                      for (final (index, parent)
+                                          in commit.parentIds.indexed) ...[
+                                        if (index > 0)
+                                          const TextSpan(text: ', '),
+                                        TextSpan(
+                                          text: _short(parent),
+                                          style: TextStyle(
+                                            color:
+                                                themeColors['textLink.foreground'],
+                                          ),
+                                          recognizer: TapGestureRecognizer()
+                                            ..onTap = () => onSelect(parent),
+                                          mouseCursor: SystemMouseCursors.click,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: description,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
                           _summary(context, files),
-                          if (commit.references.isNotEmpty) ...[
-                            const SizedBox(height: 8),
+                          // Its tags; its branches are among those that
+                          // have it, below.
+                          if (commit.references.any(
+                            (ref) => ref.kind == IdeGitRefKind.tag,
+                          )) ...[
+                            const SizedBox(height: 4),
                             Wrap(
                               spacing: 12,
                               runSpacing: 4,
                               children: [
-                                for (final label in ideGitRefLabels(
-                                  commit.references,
-                                ))
+                                for (final label in ideGitRefLabels([
+                                  for (final ref in commit.references)
+                                    if (ref.kind == IdeGitRefKind.tag) ref,
+                                ]))
                                   _refLabel(label),
                               ],
                             ),
                           ],
-                          const SizedBox(height: 8),
-                          SelectionContainer.disabled(
-                            child: Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                IdeButton(
-                                  label: log.branchesShown
-                                      ? l10n.gitLogHideBranches
-                                      : l10n.gitLogShowBranches,
-                                  secondary: true,
-                                  onPressed: () =>
-                                      log.branchesShown = !log.branchesShown,
-                                ),
-                                IdeButton(
-                                  label: log.sizesShown
-                                      ? l10n.gitLogHideSizes
-                                      : l10n.gitLogShowSizes,
-                                  secondary: true,
-                                  onPressed: () =>
-                                      log.sizesShown = !log.sizesShown,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (log.branchesShown) ...[
-                            const SizedBox(height: 8),
-                            _branches(context),
-                          ],
+                          const SizedBox(height: 4),
+                          _branches(context),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     _filesBar(context),
                     const SizedBox(height: 4),
                   ],
@@ -3263,7 +3423,7 @@ class _CommitDetails extends StatelessWidget {
               )
             else
               FutureBuilder<Map<String, ({int? added, int? deleted})>>(
-                future: log.sizesShown ? log.statsOf(git, commit.id) : null,
+                future: log.statsOf(git, commit.id),
                 builder: (context, stats) => SliverFixedExtentList(
                   itemExtent: 24,
                   delegate: SliverChildBuilderDelegate(
@@ -3319,7 +3479,7 @@ class _CommitDetails extends StatelessWidget {
     );
   }
 
-  /// The branches that have the commit, under their count: the current
+  /// The branches that have the commit, after their count: the current
   /// one's as the log draws it, a local branch and its remote's as one.
   Widget _branches(BuildContext context) => FutureBuilder<List<IdeGitRef>>(
     future: log.branchesOf(git, commit.id),
@@ -3351,19 +3511,16 @@ class _CommitDetails extends StatelessWidget {
               ? IdeGitRef(ref.id, ref.name, IdeGitRefKind.head)
               : ref,
       ]);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      return Wrap(
+        spacing: 12,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
             context.l10n.gitLogInBranches(labels.length),
             style: TextStyle(fontSize: 12, color: description),
           ),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 12,
-            runSpacing: 4,
-            children: [for (final label in labels) _refLabel(label)],
-          ),
+          for (final label in labels) _refLabel(label),
         ],
       );
     },
@@ -3375,22 +3532,12 @@ class _CommitDetails extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            _Segment(
-              icon: Codicons.listFlat,
-              label: l10n.gitLogList,
-              selected: !log.filesAsTree,
-              onTap: () => log.filesAsTree = false,
-            ),
-            const SizedBox(width: 2),
-            _Segment(
-              icon: Codicons.listTree,
-              label: l10n.gitLogTree,
-              selected: log.filesAsTree,
-              onTap: () => log.filesAsTree = true,
-            ),
-          ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IdeGitListTreeSwitch(
+            tree: log.filesAsTree,
+            onChanged: (tree) => log.filesAsTree = tree,
+          ),
         ),
         const SizedBox(height: 6),
         IdeInputBox(
@@ -3552,7 +3699,7 @@ class _CommitDetails extends StatelessWidget {
               letterColor: status.color,
             ),
           ),
-          if (log.sizesShown && stat != null) ...[
+          if (stat != null) ...[
             const SizedBox(width: 6),
             if (stat.added == null)
               Text(
@@ -3729,7 +3876,7 @@ class _DiffAreaState extends State<_DiffArea> {
     );
   }
 
-  /// Viewer Settings: side by side or unified, whitespace, highlighting.
+  /// Viewer Settings: side by side or unified, whitespace, unchanged lines.
   List<IdeMenuEntry> _settings() {
     final l10n = context.l10n;
     final options = IdeDiffOptions.instance;
@@ -3744,11 +3891,6 @@ class _DiffAreaState extends State<_DiffArea> {
           checked: options.whitespace == value,
           onSelected: () => options.whitespace = value,
         );
-    IdeMenuAction highlight(String label, DiffHighlight value) => IdeMenuAction(
-      label,
-      checked: options.highlight == value,
-      onSelected: () => options.highlight = value,
-    );
     return ideMenuGroups([
       [
         layout(l10n.diffLayoutAuto, IdeDiffLayout.auto),
@@ -3767,12 +3909,6 @@ class _DiffAreaState extends State<_DiffArea> {
           onSelected: () =>
               options.collapseUnchanged = !options.collapseUnchanged,
         ),
-      ],
-      [
-        highlight(l10n.diffHighlightWords, DiffHighlight.words),
-        highlight(l10n.diffHighlightCharacters, DiffHighlight.characters),
-        highlight(l10n.diffHighlightLines, DiffHighlight.lines),
-        highlight(l10n.diffHighlightNone, DiffHighlight.none),
       ],
     ]);
   }
@@ -4394,64 +4530,6 @@ class _AgentMark extends StatelessWidget {
   );
 }
 
-/// One of the files' List and Tree.
-class _Segment extends StatefulWidget {
-  const _Segment({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  State<_Segment> createState() => _SegmentState();
-}
-
-class _SegmentState extends State<_Segment> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final foreground = IdeListColors.foreground;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          height: 24,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: widget.selected
-                ? IdeListColors.inactiveSelection
-                : _hover
-                ? IdeActionButton.hoverBackground
-                : null,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(widget.icon, size: 14, color: foreground),
-              const SizedBox(width: 4),
-              Text(
-                widget.label,
-                style: TextStyle(fontSize: 12, color: foreground),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// An author's picture: their initial on a color of their own.
 class _Avatar extends StatelessWidget {
   const _Avatar(this.name, this.email, {required this.size});
@@ -4585,10 +4663,15 @@ class _Sash extends StatefulWidget {
     required this.size,
     required this.onResize,
     this.after = false,
+    this.gap = false,
   });
 
   final bool vertical;
   final Color color;
+
+  /// Whether it is the gap between two cards (see [Islands.gap]), not a
+  /// line between two parts.
+  final bool gap;
 
   /// The size of what it sizes, now: the part before it, or ([after]) the
   /// one after it.
@@ -4673,15 +4756,20 @@ class _SashState extends State<_Sash> {
         onHorizontalDragEnd: vertical ? null : (_) => _end(),
         onHorizontalDragCancel: vertical ? null : _end,
         child: SizedBox(
-          width: vertical ? null : 5,
-          height: vertical ? 5 : null,
-          child: Center(
-            child: Container(
-              width: vertical ? null : (active ? 3 : 1),
-              height: vertical ? (active ? 3 : 1) : null,
-              color: active ? IdeModernUI.sashHover : widget.color,
-            ),
-          ),
+          width: vertical ? null : (widget.gap ? Islands.gap : 5),
+          height: vertical ? (widget.gap ? Islands.gap : 5) : null,
+          child: widget.gap
+              ? Islands.sashLine(
+                  dragging: _dragging,
+                  axis: vertical ? Axis.vertical : Axis.horizontal,
+                )
+              : Center(
+                  child: Container(
+                    width: vertical ? null : (active ? 3 : 1),
+                    height: vertical ? (active ? 3 : 1) : null,
+                    color: active ? IdeModernUI.sashHover : widget.color,
+                  ),
+                ),
         ),
       ),
     );

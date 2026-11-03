@@ -3,21 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../chat/chat_keys.dart';
+import '../ide/file_service.dart';
 import '../ide/ide_hover.dart';
-import '../ide/ide_modern_ui.dart';
 import '../ide/ide_rows.dart';
 import '../ide/terminal/links/terminal_links.dart';
-import '../ide/terminal/terminal_colors.dart' show editorTerminalColorTheme;
+import '../ide/terminal/terminal_hosts.dart';
 import '../ide/terminal/terminal_instance.dart';
-import '../ide/terminal/terminal_panel.dart';
 import '../ide/terminal/terminal_profiles.dart';
 import '../ide/terminal/terminal_service.dart';
+import '../ide/terminal/terminal_tasks.dart';
 import '../keybindings/keybinding_service.dart';
 import '../l10n/l10n.dart';
 import '../sidebar/sidebar.dart' show SidebarIconButton;
 import '../theme/app_theme.dart';
 import '../theme/codicons.dart';
-import '../theme/workbench_theme.dart' show themeColors;
+import 'islands.dart';
+import 'terminal_deck.dart';
 
 /// Toggle Terminal (⌃`): the chat window's panel, as the IDE's.
 const toggleTerminalCommand = 'workbench.action.terminal.toggleTerminal';
@@ -57,11 +58,16 @@ class ChatTerminals extends ChangeNotifier {
   /// without one.
   final String? Function() rootOf;
 
+  /// Each project's terminals: the panel's under its conversation, and its
+  /// side panel's terminal page's.
   final Map<String, TerminalService> _services = {};
 
-  /// Each project's terminals in the side panel's terminal page: its own,
-  /// apart from the panel's, as a terminal shows in one place at a time.
-  final Map<String, TerminalService> _sideServices = {};
+  /// Which of the two places shows each terminal (see [TerminalDeck]).
+  final hosts = TerminalHosts();
+
+  /// The background command each project's panel shows, by id, in place
+  /// of its active terminal.
+  final Map<String, String> _shownTasks = {};
 
   String? get root => rootOf();
 
@@ -121,16 +127,25 @@ class ChatTerminals extends ChangeNotifier {
     return service;
   });
 
-  /// The side panel's terminals of the project in [root] (none made).
-  TerminalService sidePanelTerminals(String root) => _sideServices.putIfAbsent(
-    root,
-    () => TerminalService(
-      root: pathOf?.call(root) ?? root,
-      backend: backendFor?.call(root) ?? backend,
-      // On the editor's background, as the side panel is.
-      colorTheme: editorTerminalColorTheme,
-    ),
-  );
+  /// The terminals of the project in [root], for its side panel's page as
+  /// for its panel (none made).
+  TerminalService terminalsOf(String root) => _serviceOf(root);
+
+  /// The background command [root]'s panel shows; none: its active
+  /// terminal.
+  String? taskShownOf(String root) => _shownTasks[root];
+
+  /// [root]'s panel on the background command [id]; null: back on its
+  /// active terminal.
+  void showTask(String root, String? id) {
+    if (_shownTasks[root] == id) return;
+    if (id == null) {
+      _shownTasks.remove(root);
+    } else {
+      _shownTasks[root] = id;
+    }
+    notifyListeners();
+  }
 
   void _changed(String root, TerminalService service) {
     if (_shown.contains(root) && service.instances.isEmpty) {
@@ -151,7 +166,8 @@ class ChatTerminals extends ChangeNotifier {
     if (target == null) return;
     final service = _serviceOf(target);
     _shown.add(target);
-    service.ensureTerminal();
+    _shownTasks.remove(target);
+    hosts.claim(service.ensureTerminal(), service);
     notifyListeners();
     _focusSoon(service);
   }
@@ -169,14 +185,17 @@ class ChatTerminals extends ChangeNotifier {
 
   /// A new terminal for [root] (the focused project) on [profile]'s shell
   /// (else the default profile's), shown and focused.
-  void create({TerminalProfile? profile, String? root}) {
+  TerminalInstance? create({TerminalProfile? profile, String? root}) {
     final target = root ?? this.root;
-    if (target == null) return;
+    if (target == null) return null;
     final service = _serviceOf(target);
-    service.create(profile: profile);
+    final terminal = service.create(profile: profile);
     _shown.add(target);
+    _shownTasks.remove(target);
+    hosts.claim(terminal, service);
     notifyListeners();
     _focusSoon(service);
+    return terminal;
   }
 
   /// Focus Next (Previous) Terminal Group, among [root]'s.
@@ -184,6 +203,7 @@ class ChatTerminals extends ChangeNotifier {
     final service = current;
     if (service == null) return;
     next ? service.focusNext() : service.focusPrevious();
+    if (service.active case final active?) hosts.claim(active, service);
     _focusSoon(service);
   }
 
@@ -203,7 +223,7 @@ class ChatTerminals extends ChangeNotifier {
   /// Whether a shell is alive, or ([childProcesses]) one runs a command
   /// (`terminal.integrated.confirmOnExit`), in any project's terminals.
   bool running({required bool childProcesses}) {
-    for (final service in [..._services.values, ..._sideServices.values]) {
+    for (final service in _services.values) {
       for (final terminal in service.instances) {
         if (terminal.exited) continue;
         if (!childProcesses) return true;
@@ -218,11 +238,11 @@ class ChatTerminals extends ChangeNotifier {
   /// Hangs up every terminal.
   @override
   void dispose() {
-    for (final service in [..._services.values, ..._sideServices.values]) {
+    for (final service in _services.values) {
       service.dispose();
     }
     _services.clear();
-    _sideServices.clear();
+    hosts.dispose();
     super.dispose();
   }
 }
@@ -240,22 +260,34 @@ class ChatTerminalArea extends StatefulWidget {
     required this.terminals,
     required this.root,
     required this.child,
+    this.below,
+    this.tasks,
+    this.files,
     this.onOpenLink,
   });
 
   final ChatTerminals terminals;
+
+  /// The conversation's row under its card (its branch): under the
+  /// panel's card while that shows, at the window's foot.
+  final Widget? below;
 
   /// The project whose terminals the panel shows.
   final String root;
 
   final Widget child;
 
+  /// The conversation's background commands, in a tab of the panel's, and
+  /// what reads their output.
+  final TerminalTasks? tasks;
+  final IdeFileService? files;
+
   /// Opens a link ⌘-clicked (Ctrl-clicked off macOS) in a terminal.
   final ValueChanged<TerminalLink>? onOpenLink;
 
-  /// The strip at the panel's top edge that takes the drag; its line is
-  /// at the bottom of it, against the panel.
-  static const sashHeight = 5.0;
+  /// The gap between the conversation's card and the panel's, which takes
+  /// the drag.
+  static const sashHeight = Islands.gap;
 
   @override
   State<ChatTerminalArea> createState() => _ChatTerminalAreaState();
@@ -277,7 +309,8 @@ class _ChatTerminalAreaState extends State<ChatTerminalArea> {
       builder: (context, constraints) {
         final service = _terminals.serviceOf(_root);
         final shown = _terminals.shownFor(_root);
-        final room = constraints.maxHeight - ChatTerminalArea.sashHeight;
+        final foot = widget.below == null ? 0.0 : Islands.belowHeight;
+        final room = constraints.maxHeight - ChatTerminalArea.sashHeight - foot;
         final rows = IdeRows.fit(
           room,
           panel: shown
@@ -285,24 +318,62 @@ class _ChatTerminalAreaState extends State<ChatTerminalArea> {
               : null,
           minAbove: IdeRows.minChat,
         );
+        final panel = shown && service != null && rows.panel > 0;
         // The conversations stay the first child, whether the panel shows
         // or not, so they are never built anew for it.
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        return Stack(
+          fit: StackFit.expand,
           children: [
-            Expanded(child: widget.child),
-            if (shown && service != null && rows.panel > 0) ...[
-              _sash(rows, room),
-              SizedBox(
-                height: rows.panel,
-                child: _ChatTerminalPanel(
-                  terminals: _terminals,
-                  root: _root,
-                  service: service,
-                  onOpenLink: widget.onOpenLink,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: IslandFootHosted(
+                    hosted: panel && widget.below != null,
+                    child: widget.child,
+                  ),
                 ),
+                if (panel) ...[
+                  const SizedBox(height: ChatTerminalArea.sashHeight),
+                  SizedBox(
+                    height: rows.panel,
+                    child: _ChatTerminalPanel(
+                      // The shared panel can move to another pane of the
+                      // same project without remounting its focused
+                      // terminal.
+                      key: GlobalObjectKey(service),
+                      terminals: _terminals,
+                      root: _root,
+                      service: service,
+                      tasks: widget.tasks,
+                      files: widget.files,
+                      onOpenLink: widget.onOpenLink,
+                    ),
+                  ),
+                  if (widget.below case final below?)
+                    SizedBox(
+                      height: Islands.belowHeight,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: Islands.inset,
+                        ),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: below,
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+            if (panel)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: rows.panel + foot,
+                height: ChatTerminalArea.sashHeight,
+                child: _sash(rows, room),
               ),
-            ],
           ],
         );
       },
@@ -339,17 +410,8 @@ class _ChatTerminalAreaState extends State<ChatTerminalArea> {
       onVerticalDragEnd: (_) => _endDrag(),
       onVerticalDragCancel: _endDrag,
       onDoubleTap: () => setState(() => _terminals.setHeight(_root, null)),
-      child: Container(
-        height: ChatTerminalArea.sashHeight,
-        alignment: Alignment.bottomCenter,
-        // At rest the line between the two; dragged, as thick as the IDE's
-        // sashes, in their `sash.hoverBorder`.
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
-          height: _dragging ? IdeModernUI.gap : 1,
-          color: _dragging ? IdeModernUI.sashHover : AppColors.partBorder,
-        ),
-      ),
+      // The gap alone at rest; dragged, the IDE's sash in it.
+      child: Islands.sashLine(dragging: _dragging, axis: Axis.vertical),
     ),
   );
 
@@ -362,13 +424,16 @@ class _ChatTerminalAreaState extends State<ChatTerminalArea> {
   }
 }
 
-/// The panel: its title (TERMINAL, the terminal's actions, Hide) over the
-/// active terminal, with their tabs once there are two or more.
+/// The panel: the project's terminals as a [TerminalDeck], as the side
+/// panel's terminal page shows them; Hide at the end of its tabs.
 class _ChatTerminalPanel extends StatelessWidget {
   const _ChatTerminalPanel({
+    super.key,
     required this.terminals,
     required this.root,
     required this.service,
+    this.tasks,
+    this.files,
     this.onOpenLink,
   });
 
@@ -379,65 +444,47 @@ class _ChatTerminalPanel extends StatelessWidget {
   final String root;
 
   final TerminalService service;
+  final TerminalTasks? tasks;
+  final IdeFileService? files;
   final ValueChanged<TerminalLink>? onOpenLink;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = themeColors;
-    final l10n = context.l10n;
-    // The terminal's own (terminal_colors.dart), so the title is of a
-    // piece with it.
-    final background =
-        colors.get('terminal.background') ?? colors['panel.background'];
-    return ColoredBox(
-      color: background,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            height: 30,
-            child: Row(
-              children: [
-                const SizedBox(width: 16),
-                Text(
-                  l10n.panelTerminal,
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 0.3,
-                    color: colors['panelTitle.activeForeground'],
-                  ),
-                ),
-                const Spacer(),
-                TerminalTitleActions(
-                  terminals: service,
-                  onNew: () => terminals.create(root: root),
-                  onNewWithProfile: (profile) =>
-                      terminals.create(profile: profile, root: root),
-                ),
-                IdeActionButton(
-                  icon: Codicons.close,
-                  tooltip: KeybindingService.instance.titleWithKeybinding(
-                    l10n.chatTerminalHide,
-                    toggleTerminalCommand,
-                  ),
-                  onPressed: () => terminals.hide(root: root),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ),
-          ),
-          Expanded(
-            child: TerminalPanel(
-              terminals: service,
-              onNew: terminals.create,
-              skipShell: chatTerminalSkipShell,
-              onOpenLink: onOpenLink,
-            ),
-          ),
-        ],
+  Widget build(BuildContext context) =>
+      Island(color: AppColors.code, child: _deck(context));
+
+  Widget _deck(BuildContext context) => TerminalDeck(
+    key: const ValueKey('chat-terminal-panel'),
+    // One panel a project, wherever it shows.
+    place: service,
+    hosts: terminals.hosts,
+    terminals: service,
+    // A background command chosen, else the active terminal (which the
+    // window's terminal commands act on).
+    shown: terminals.taskShownOf(root) ?? service.active,
+    onShow: (id) {
+      if (id case final TerminalInstance shell) {
+        terminals.showTask(root, null);
+        service.setActive(shell);
+      } else if (id case final String task) {
+        terminals.showTask(root, task);
+      }
+    },
+    onNew: () => terminals.create(root: root),
+    onNewWithProfile: (profile) =>
+        terminals.create(profile: profile, root: root),
+    tasks: tasks,
+    files: files,
+    skipShell: chatTerminalSkipShell,
+    onOpenLink: onOpenLink,
+    trailing: IdeActionButton(
+      icon: Codicons.close,
+      tooltip: KeybindingService.instance.titleWithKeybinding(
+        context.l10n.chatTerminalHide,
+        toggleTerminalCommand,
       ),
-    );
-  }
+      onPressed: () => terminals.hide(root: root),
+    ),
+  );
 }
 
 /// The window's keys skip the shell of a terminal in it: those it has run

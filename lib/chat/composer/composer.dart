@@ -87,6 +87,7 @@ class ChatComposer extends StatefulWidget {
     this.initialText,
     this.initialImages = const [],
     this.onSubmit,
+    this.onIntercept,
     this.onCancel,
     this.tapRegionGroupId,
     this.draft,
@@ -105,6 +106,10 @@ class ChatComposer extends StatefulWidget {
   /// Images to start from (the message being edited had them).
   final List<ImageAttachment> initialImages;
   final ValueChanged<ComposerMessage>? onSubmit;
+
+  /// Takes a message the app handles itself, never the agent's (a side
+  /// question, say): true when it was, and what is typed is gone.
+  final bool Function(ComposerMessage message)? onIntercept;
   final VoidCallback? onCancel;
 
   /// Group of a [TapRegion] around this composer: its menus, which open in
@@ -344,6 +349,7 @@ class ChatComposerState extends State<ChatComposer>
       if (!mounted) return;
       _focusNode.requestFocus();
       _takeDraftFiles();
+      _takeDraftCode();
       _takeDraftMessage();
     });
   }
@@ -679,6 +685,18 @@ class ChatComposerState extends State<ChatComposer>
     if (files.isNotEmpty) unawaited(insertFiles(files));
   }
 
+  /// The lines of code put in the draft from outside (see
+  /// [ComposerDraft.insertCode]): tags of them after what is typed, as the
+  /// IDE's lines pasted are.
+  void _takeDraftCode() {
+    final code = widget.draft?.takeCode() ?? const <CodeReference>[];
+    final root = widget.session.root;
+    _insertTags([
+      for (final lines in code)
+        ComposerCodeEmbed.of(lines.withPath(displayPath(lines.path, root))),
+    ], at: _controller.length);
+  }
+
   /// The message put back in the draft to be edited (see
   /// [ComposerDraft.restore]): after what is typed, the caret at its end.
   void _takeDraftMessage() {
@@ -738,6 +756,7 @@ class ChatComposerState extends State<ChatComposer>
   void _handleDraftChanged() {
     final draft = widget.draft;
     if (draft != null && draft.pendingFiles.isNotEmpty) _takeDraftFiles();
+    if (draft != null && draft.pendingCode.isNotEmpty) _takeDraftCode();
     if (draft?.pendingMessage != null) _takeDraftMessage();
     if (draft == null || identical(draft.savedBy, this) || !draft.saved) {
       return;
@@ -1064,8 +1083,7 @@ class ChatComposerState extends State<ChatComposer>
 
   bool get _caretAtEnd {
     final selection = _controller.selection;
-    return selection.isCollapsed &&
-        selection.baseOffset >= _controller.length;
+    return selection.isCollapsed && selection.baseOffset >= _controller.length;
   }
 
   @override
@@ -1458,11 +1476,23 @@ class ChatComposerState extends State<ChatComposer>
     if (_showsStop) return;
     final message = _buildMessage();
     if (message.text.isEmpty && message.images.isEmpty) return;
+    if (widget.onIntercept case final intercept? when intercept(message)) {
+      _pool = {};
+      _controller.clear();
+      _leaveHistory();
+      _saveDraft();
+      _dismissedTrigger = null;
+      return;
+    }
     if (widget.onSubmit case final onSubmit?) {
       onSubmit(message);
       return;
     }
-    widget.session.send(message, editor: widget.openEditor);
+    widget.session.send(
+      message,
+      editor: widget.openEditor,
+      from: UserPlace.computer,
+    );
     _pool = {};
     _controller.clear();
     _leaveHistory();
@@ -1622,17 +1652,14 @@ class ChatComposerState extends State<ChatComposer>
           // the color of every bubble, and their line; typed into, the line
           // turns a little towards the accent.
           color: AppColors.bubbleFill,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.bubbleBorder(focused: focused)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ComposerImages(
-              images: _pool,
-              child: _editor!,
-            ),
+            ComposerImages(images: _pool, child: _editor!),
             _buildToolbar(),
           ],
         ),
@@ -1860,6 +1887,8 @@ class ChatComposerState extends State<ChatComposer>
         }.replaceAll(RegExp(r'[\x00-\x1f]+'), ' '),
         onKey: _handleKey,
         onPaste: _paste,
+        onPasteCopy: (markdown) =>
+            renumberPastes(markdown, from: _nextPastedNumber()),
         style: MarkdownEditorStyle(
           text: base,
           selection: AppColors.textSelection,

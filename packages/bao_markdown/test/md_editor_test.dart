@@ -12,6 +12,21 @@ const _style = MarkdownEditorStyle(
   text: TextStyle(fontSize: 14, height: 1.5, color: Color(0xFF000000)),
 );
 
+/// What the editors copied ([written]), and what a paste finds ([held]).
+class _FakeClipboard extends MdClipboard {
+  MdClip? written;
+  ({String? text, MdClip? clip}) held = (text: null, clip: null);
+
+  @override
+  Future<void> write(MdClip clip) async {
+    written = clip;
+    held = (text: clip.plain, clip: clip);
+  }
+
+  @override
+  Future<({String? text, MdClip? clip})> read() async => held;
+}
+
 Future<MarkdownEditorState> _pump(
   WidgetTester tester,
   MarkdownController controller, {
@@ -338,6 +353,97 @@ void main() {
     expect(controller.selection.extentOffset, 4);
   });
 
+  for (final platform in [TargetPlatform.macOS, TargetPlatform.windows]) {
+    testWidgets('Home and End reach the line\'s ends on $platform', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = platform;
+      final controller = MarkdownController(text: 'ab\ncd');
+      final state = await _pump(tester, controller);
+      state.requestFocus();
+      controller.selection = const TextSelection.collapsed(offset: 4);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.pump();
+      expect(controller.selection.extentOffset, 3);
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.pump();
+      expect(controller.selection.extentOffset, 5);
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    testWidgets('Shift with Home and End selects to the line\'s ends on '
+        '$platform', (tester) async {
+      debugDefaultTargetPlatformOverride = platform;
+      final controller = MarkdownController(text: 'ab\ncd\nef');
+      final state = await _pump(tester, controller);
+      state.requestFocus();
+      controller.selection = const TextSelection.collapsed(offset: 4);
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.pump();
+      expect(controller.selection.baseOffset, 4);
+      expect(controller.selection.extentOffset, 3);
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+      expect(controller.selection.baseOffset, 4);
+      expect(controller.selection.extentOffset, 5);
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
+
+  testWidgets('Ctrl with the numpad\'s 7 and 1 reaches the document\'s ends '
+      'on Windows', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    final controller = MarkdownController(text: 'ab\ncd\nef');
+    final state = await _pump(tester, controller);
+    state.requestFocus();
+    controller.selection = const TextSelection.collapsed(offset: 4);
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpad7);
+    await tester.pump();
+    expect(controller.selection.extentOffset, 0);
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpad1);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(controller.selection.extentOffset, 8);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('the numpad\'s 7 and 1 reach the line\'s ends on Windows', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    final controller = MarkdownController(text: 'ab\ncd');
+    final state = await _pump(tester, controller);
+    state.requestFocus();
+    controller.selection = const TextSelection.collapsed(offset: 4);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpad7);
+    await tester.pump();
+    expect(controller.selection.extentOffset, 3);
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpad1);
+    await tester.pump();
+    expect(controller.selection.extentOffset, 5);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('the numpad\'s 7 and 1 stay digits elsewhere', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final controller = MarkdownController(text: 'ab\ncd');
+    final state = await _pump(tester, controller);
+    state.requestFocus();
+    controller.selection = const TextSelection.collapsed(offset: 4);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.numpad7);
+    await tester.pump();
+    expect(controller.selection.extentOffset, 4);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('composed text is typed in as it is composed', (tester) async {
     final controller = MarkdownController(text: 'ab');
     final state = await _pump(tester, controller);
@@ -381,6 +487,50 @@ void main() {
     final configuration =
         (setClient.arguments as List<Object?>)[1]! as Map<String, Object?>;
     expect(configuration['viewId'], tester.view.viewId);
+  });
+
+  testWidgets('cut off from the input with the keyboard still its, a click '
+      'attaches it again', (tester) async {
+    final lost = <String>[];
+    MarkdownEditor.onInputLost = lost.add;
+    addTearDown(() => MarkdownEditor.onInputLost = null);
+    final controller = MarkdownController(text: 'ab');
+    final state = await _pump(tester, controller);
+    state.requestFocus();
+    await tester.pump();
+    // Another client takes the input, the editor keeping the keyboard.
+    final other = TextInput.attach(_Client(), const TextInputConfiguration());
+    other.close();
+    await tester.pump();
+    expect(state.hasFocus, isTrue);
+    await tester.tapAt(
+      state.caretRect(2)!.center,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    expect(lost, ['taken by another client; attached again on a click']);
+    await _type(tester, 'c');
+    expect(controller.text, 'abc');
+  });
+
+  testWidgets('its input closed by the platform, a key attaches it again', (
+    tester,
+  ) async {
+    final lost = <String>[];
+    MarkdownEditor.onInputLost = lost.add;
+    addTearDown(() => MarkdownEditor.onInputLost = null);
+    final controller = MarkdownController(text: 'ab');
+    final state = await _pump(tester, controller);
+    state.requestFocus();
+    controller.selection = const TextSelection.collapsed(offset: 2);
+    await tester.pump();
+    tester.testTextInput.closeConnection();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    await tester.pump();
+    expect(lost, ['closed; attached again on a key']);
+    await _type(tester, 'c');
+    expect(controller.text, 'abc');
   });
 
   testWidgets('what Windows composes is not told back to it as it composes', (
@@ -523,6 +673,72 @@ void main() {
     controller.selection = TextSelection.collapsed(offset: controller.length);
     await state.paste();
     expect(controller.text, 'x **b** y\n- itemx **b** y\n- item');
+  });
+
+  testWidgets('copies and pastes through MdClipboard.instance: its copy as '
+      'its markdown, of the other kind or none as the text', (tester) async {
+    final clipboard = _FakeClipboard();
+    MdClipboard.instance = clipboard;
+    addTearDown(() => MdClipboard.instance = const MdClipboard());
+    final controller = MarkdownController(text: 'x **b** y');
+    final state = await _pump(tester, controller);
+    state.requestFocus();
+    controller.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: controller.length,
+    );
+    await state.copy();
+    expect(
+      clipboard.written,
+      const MdClip(plain: 'x b y', markdown: 'x **b** y', fromPlain: false),
+    );
+
+    // Its copy: pasted as it was, though the text is not the copy's.
+    controller.selection = TextSelection.collapsed(offset: controller.length);
+    clipboard.held = (
+      text: 'something else',
+      clip: const MdClip(plain: 'x b y', markdown: ' *i*', fromPlain: false),
+    );
+    await state.paste();
+    expect(controller.text, 'x **b** y *i*');
+
+    // Another app's copy: its text.
+    clipboard.held = (text: ' t', clip: null);
+    await state.paste();
+    expect(controller.text, 'x **b** y *i* t');
+
+    // A plain text's copy: its text, not its markdown.
+    clipboard.held = (
+      text: ' p',
+      clip: const MdClip(plain: ' p', markdown: ' **p**', fromPlain: true),
+    );
+    await state.paste();
+    expect(controller.text, 'x **b** y *i* t p');
+  });
+
+  testWidgets('MdClipboard pastes its copy back while the clipboard has its '
+      'text', (tester) async {
+    String? text;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => switch (call.method) {
+        'Clipboard.setData' => () {
+          text = (call.arguments as Map)['text'] as String;
+          return null;
+        }(),
+        'Clipboard.getData' => {'text': text},
+        _ => null,
+      },
+    );
+    addTearDown(MdClipboard.reset);
+    const clipboard = MdClipboard();
+    const clip = MdClip(plain: 'b', markdown: '**b**', fromPlain: false);
+    await clipboard.write(clip);
+    expect(text, 'b');
+    expect((await clipboard.read()).clip, clip);
+    // Copied elsewhere since.
+    text = 'c';
+    expect(await clipboard.read(), (text: 'c', clip: null));
   });
 
   testWidgets('a drag selects, past the bottom it scrolls on', (tester) async {
@@ -675,4 +891,31 @@ class _GrowingImage extends MarkdownEmbeds {
       builder: (context, height, _) => SizedBox(width: 50, height: height),
     ),
   );
+}
+
+/// A text input client that does nothing: another field taking the input.
+class _Client with TextInputClient {
+  @override
+  TextEditingValue? get currentTextEditingValue => TextEditingValue.empty;
+
+  @override
+  AutofillScope? get currentAutofillScope => null;
+
+  @override
+  void updateEditingValue(TextEditingValue value) {}
+
+  @override
+  void performAction(TextInputAction action) {}
+
+  @override
+  void performPrivateCommand(String action, Map<String, dynamic> data) {}
+
+  @override
+  void updateFloatingCursor(RawFloatingCursorPoint point) {}
+
+  @override
+  void showAutocorrectionPromptRect(int start, int end) {}
+
+  @override
+  void connectionClosed() {}
 }

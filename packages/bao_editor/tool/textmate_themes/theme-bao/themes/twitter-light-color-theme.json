@@ -165,6 +165,8 @@
 		"peekViewTitleLabel.foreground": "#29292C",
 		"editorGutter.addedBackground": "#5C7F37",
 		"editorGutter.deletedBackground": "#B0443A",
+		"diffEditor.insertedLineBackground": "#5C7F3714",
+		"diffEditor.removedLineBackground": "#B0443A14",
 		"diffEditor.insertedTextBackground": "#5C7F3726",
 		"diffEditor.removedTextBackground": "#B0443A26",
 		"editorOverviewRuler.border": "#E6E6EB",

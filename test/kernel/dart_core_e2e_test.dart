@@ -36,6 +36,11 @@ void main() {
   late ModelProviders providers;
 
   setUp(() async {
+    // The upstreams' proxy is in this isolate: real sockets, not the test
+    // binding's 400s.
+    final overrides = HttpOverrides.current;
+    HttpOverrides.global = null;
+    addTearDown(() => HttpOverrides.global = overrides);
     root = Directory.systemTemp
         .createTempSync('baocode-core-e2e-')
         .resolveSymbolicLinksSync();
@@ -211,8 +216,9 @@ void main() {
       expect(lines.first, 'user: Ask me for a color and write it down');
       expect(lines, contains('diff: color.txt +2'));
       expect(lines, contains('terminal: cat color.txt'));
+      // The list written: a step of the turn, nothing kept beside it.
+      expect(lines, contains('tool: todo '));
       expect(lines.last, 'text: done');
-      expect(transcript.todos.single.content, 'Pick a color');
       expect(written, isNotEmpty);
       expect(written.last, greaterThan(0));
       // Its thinking asked for summarized, for the chat to show.
@@ -382,6 +388,7 @@ void main() {
         'description': 'Look around',
         'prompt': 'List the files',
         'subagent_type': 'general-purpose',
+        'run_in_background': false,
       }),
       Reply.text('nothing here'),
       Reply.text('it found nothing'),
@@ -435,6 +442,7 @@ void main() {
         'prompt': 'List the files',
         'subagent_type': 'general-purpose',
         'model': 'haiku',
+        'run_in_background': false,
       }),
       Reply.text('it found nothing'),
     ]);
