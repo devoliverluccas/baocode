@@ -11953,7 +11953,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get companyClaude => 'Claude for its projects';
 
   @override
-  String get companyNone => 'No company';
+  String get companyNone => 'Default account';
 
   @override
   String get companyMove => 'Move to company…';
@@ -12906,4 +12906,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get ustatContextUnpickHint => '再次点击取消选中，回到当前上下文';
+
+  @override
+  String get cmdChatNextNeedingYou => 'Go to Next Agent Needing You';
+
+  @override
+  String get companyNoneTooltip =>
+      'This project is in no company: it runs with the default Claude account. Click to put it in one.';
 }

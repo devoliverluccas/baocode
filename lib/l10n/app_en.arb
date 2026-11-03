@@ -8667,5 +8667,8 @@
   "ustatUpstreamRates": "Upstream rates",
   "ustatUpstreamRatesDetail": "The models of these upstreams without a price of their own: the same model's price elsewhere, times the rate.",
   "ustatUpstreamRateClear": "Clear the rate",
-  "ustatContextUnpickHint": "Click again to unpick: back to the context as it is now"
+  "ustatContextUnpickHint": "Click again to unpick: back to the context as it is now",
+  "cmdChatNextNeedingYou": "Go to Next Agent Needing You",
+  "companyNone": "Default account",
+  "companyNoneTooltip": "This project is in no company: it runs with the default Claude account. Click to put it in one."
 }

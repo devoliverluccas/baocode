@@ -20592,7 +20592,7 @@ abstract class AppLocalizations {
   /// No description provided for @companyNone.
   ///
   /// In en, this message translates to:
-  /// **'No company'**
+  /// **'Default account'**
   String get companyNone;
 
   /// No description provided for @companyMove.
@@ -22232,6 +22232,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Click again to unpick: back to the context as it is now'**
   String get ustatContextUnpickHint;
+
+  /// No description provided for @cmdChatNextNeedingYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Next Agent Needing You'**
+  String get cmdChatNextNeedingYou;
+
+  /// No description provided for @companyNoneTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'This project is in no company: it runs with the default Claude account. Click to put it in one.'**
+  String get companyNoneTooltip;
 }
 
 class _AppLocalizationsDelegate

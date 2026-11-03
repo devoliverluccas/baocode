@@ -112,6 +112,22 @@ enum ThreadStatus {
   idle,
 }
 
+/// After [current] in [ordered], round from the end, the next that needs
+/// the user: those waiting on an answer first, then those finished unread.
+T? nextNeedingYou<T>(
+  List<T> ordered,
+  T? current,
+  ThreadStatus Function(T) statusOf,
+) {
+  final waiting = [
+    for (final status in [ThreadStatus.needsInput, ThreadStatus.unread])
+      ...ordered.where((thread) => statusOf(thread) == status),
+  ];
+  if (waiting.isEmpty) return null;
+  final at = waiting.indexWhere((thread) => thread == current);
+  return waiting[(at + 1) % waiting.length];
+}
+
 /// One agent conversation in the sidebar. A kept session's conversation
 /// is only read, and its kernel only started, once it is opened.
 class AgentThread {

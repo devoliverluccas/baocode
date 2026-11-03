@@ -1,7 +1,11 @@
 import 'dart:io';
 
 import 'package:bao_remote/local.dart' show ClaudeEnvironment;
+import 'package:baocode/l10n/app_localizations.dart';
 import 'package:baocode/workspace/companies.dart';
+import 'package:baocode/workspace/company_dialog.dart';
+import 'package:baocode/workspace/workspace.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -44,5 +48,53 @@ void main() {
     companies.remove('LUTECH');
     expect(companies.of(project), isNull);
     expect(ClaudeEnvironment.profileFor(project), '/h/.claude-stark');
+  });
+
+  testWidgets('a project in no company says so, and is put in one from it', (
+    tester,
+  ) async {
+    final dir = Directory.systemTemp.createTempSync('companies');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    ClaudeEnvironment.profilesFile = p.join(dir.path, 'claude-profiles.json');
+    addTearDown(() => ClaudeEnvironment.profilesFile = null);
+    final companies = Companies.instance;
+    final project = Project.at(p.join(dir.path, 'loja'));
+    companies.put('LUNAR', '/h/.claude-lunar');
+    addTearDown(() => companies.remove('LUNAR'));
+    expect(placeOf(project), isNull);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: NoCompanyNotice(path: project.path)),
+      ),
+    );
+    await tester.tap(find.textContaining('Default account'));
+    await tester.pumpAndSettle();
+    expect(find.text('New company…'), findsOneWidget);
+    await tester.tap(find.text('LUNAR'));
+    await tester.pumpAndSettle();
+    expect(companies.of(project.path)?.name, 'LUNAR');
+    expect(placeOf(project), 'LUNAR › loja');
+  });
+
+  test('the next agent needing you: waiting ones, then unread, round', () {
+    const statuses = {
+      'a': ThreadStatus.unread,
+      'b': ThreadStatus.idle,
+      'c': ThreadStatus.needsInput,
+      'd': ThreadStatus.running,
+      'e': ThreadStatus.unread,
+    };
+    final order = statuses.keys.toList();
+    String? next(String? current) =>
+        nextNeedingYou(order, current, (id) => statuses[id]!);
+    expect(next(null), 'c');
+    expect(next('b'), 'c');
+    expect(next('c'), 'a');
+    expect(next('a'), 'e');
+    expect(next('e'), 'c');
+    expect(nextNeedingYou(['b', 'd'], 'b', (id) => statuses[id]!), isNull);
   });
 }

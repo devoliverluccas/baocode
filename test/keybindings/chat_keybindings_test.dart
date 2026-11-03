@@ -64,6 +64,8 @@ void main() {
     expect(windows(ChatCommandIds.closePane), 'Ctrl+W');
     expect(mac(ChatCommandIds.nextAgent), '⇧⌘]');
     expect(linux(ChatCommandIds.nextAgent), 'Ctrl+PageDown');
+    expect(mac(ChatCommandIds.nextNeedingYou), '⌥⌘J');
+    expect(windows(ChatCommandIds.nextNeedingYou), 'Ctrl+Alt+J');
     expect(mac(ChatCommandIds.previousAgent), '⇧⌘[');
     expect(windows(ChatCommandIds.previousAgent), 'Ctrl+PageUp');
     expect(mac('${ChatCommandIds.openAgentAtIndex}3'), '⌃3');

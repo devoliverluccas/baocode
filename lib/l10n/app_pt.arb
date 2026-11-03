@@ -3711,5 +3711,8 @@
   "ustatUpstreamRates": "Taxas dos upstreams",
   "ustatUpstreamRatesDetail": "Os modelos destes upstreams sem preço próprio: o preço do mesmo modelo em outro lugar, vezes a taxa.",
   "ustatUpstreamRateClear": "Limpar a taxa",
-  "ustatContextUnpickHint": "Clique de novo para desmarcar: volta ao contexto como está agora"
+  "ustatContextUnpickHint": "Clique de novo para desmarcar: volta ao contexto como está agora",
+  "cmdChatNextNeedingYou": "Ir para a Próxima Conversa que Precisa de Você",
+  "companyNone": "Conta padrão",
+  "companyNoneTooltip": "Este projeto não está em nenhuma empresa: roda com a conta padrão do Claude. Clique para colocá-lo em uma."
 }

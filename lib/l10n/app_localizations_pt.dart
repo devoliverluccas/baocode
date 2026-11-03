@@ -12729,7 +12729,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get companyClaude => 'Claude dos projetos dela';
 
   @override
-  String get companyNone => 'Sem empresa';
+  String get companyNone => 'Conta padrão';
 
   @override
   String get companyMove => 'Mover para empresa…';
@@ -13751,4 +13751,12 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get ustatContextUnpickHint =>
       'Clique de novo para desmarcar: volta ao contexto como está agora';
+
+  @override
+  String get cmdChatNextNeedingYou =>
+      'Ir para a Próxima Conversa que Precisa de Você';
+
+  @override
+  String get companyNoneTooltip =>
+      'Este projeto não está em nenhuma empresa: roda com a conta padrão do Claude. Clique para colocá-lo em uma.';
 }
