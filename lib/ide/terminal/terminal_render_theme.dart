@@ -510,10 +510,11 @@ class WarpLook {
   final double lineHeight;
 }
 
-/// [options] as Warp draws its terminal with [look], in its Dark theme:
-/// white on near black, its accent's cursor, colors never changed for
-/// contrast (Warp changes only the default colors', which already have it)
-/// and bold not brightened.
+/// [options] as Warp draws its terminal with [look], in its Dark theme on
+/// the app theme's terminal background: white text, its accent's cursor,
+/// colors never changed for contrast (Warp changes only the default
+/// colors', which already have it) and bold not brightened. On a light
+/// background, the theme's colors with their contrast kept.
 void warpTerminalStyle(ITerminalOptions options, WarpLook look) {
   options
     ..fontFamily = [
@@ -524,33 +525,50 @@ void warpTerminalStyle(ITerminalOptions options, WarpLook look) {
     ..fontSize = look.fontSize
     ..fontWeight = look.fontWeight
     ..lineHeight = look.lineHeight
-    ..minimumContrastRatio = 1
+    ..minimumContrastRatio = _light(options.theme ?? ITheme())
+        ? options.minimumContrastRatio
+        : 1
     ..drawBoldTextInBrightColors = false
     ..cursorStyle = 'bar'
     ..cursorBlink = true
     ..theme = warpTerminalTheme(options.theme);
 }
 
-/// Warp Dark's colors (its default_themes.rs) over [base]'s selection and
-/// scrollbar.
-ITheme warpTerminalTheme(ITheme? base) => (base ?? ITheme())
-  ..foreground = '#ffffff'
-  ..background = '#050505'
-  ..cursor = '#19aad8'
-  ..cursorAccent = '#050505'
-  ..black = '#616161'
-  ..red = '#ff8272'
-  ..green = '#b4fa72'
-  ..yellow = '#fefdc2'
-  ..blue = '#a5d5fe'
-  ..magenta = '#ff8ffd'
-  ..cyan = '#d0d1fe'
-  ..white = '#f1f1f1'
-  ..brightBlack = '#8e8e8e'
-  ..brightRed = '#ffc4bd'
-  ..brightGreen = '#d6fcb9'
-  ..brightYellow = '#fefdd5'
-  ..brightBlue = '#c1e3fe'
-  ..brightMagenta = '#ffb1fe'
-  ..brightCyan = '#e5e6fe'
-  ..brightWhite = '#feffff';
+/// Warp Dark's colors (its default_themes.rs) over [base]'s background,
+/// selection and scrollbar; on a light background (a light app theme),
+/// [base]'s own colors, which Warp Dark's would not read on.
+ITheme warpTerminalTheme(ITheme? base) {
+  final theme = base ?? ITheme();
+  if (_light(theme)) return theme;
+  final background = theme.background ?? warpBackground;
+  return theme
+    ..foreground = '#ffffff'
+    ..background = background
+    ..cursor = '#19aad8'
+    ..cursorAccent = background
+    ..black = '#616161'
+    ..red = '#ff8272'
+    ..green = '#b4fa72'
+    ..yellow = '#fefdc2'
+    ..blue = '#a5d5fe'
+    ..magenta = '#ff8ffd'
+    ..cyan = '#d0d1fe'
+    ..white = '#f1f1f1'
+    ..brightBlack = '#8e8e8e'
+    ..brightRed = '#ffc4bd'
+    ..brightGreen = '#d6fcb9'
+    ..brightYellow = '#fefdd5'
+    ..brightBlue = '#c1e3fe'
+    ..brightMagenta = '#ffb1fe'
+    ..brightCyan = '#e5e6fe'
+    ..brightWhite = '#feffff';
+}
+
+/// Warp Dark's background, where the theme gives the terminal none.
+const warpBackground = '#050505';
+
+bool _light(ITheme theme) =>
+    rgb.relativeLuminance(
+      css.toColor(theme.background ?? warpBackground).rgba >> 8,
+    ) >
+    0.5;

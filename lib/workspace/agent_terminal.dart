@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../chat/widgets/pixel_loader.dart';
+import '../ide/terminal/pty.dart';
+import '../ide/terminal/terminal_colors.dart' show terminalColorTheme;
 import '../ide/terminal/terminal_instance.dart';
 import '../ide/terminal/terminal_render_theme.dart' show WarpLook;
 import '../ide/terminal/terminal_service.dart';
@@ -86,16 +88,26 @@ class AgentTerminals extends ChangeNotifier {
   Future<void> stop(String id) async {
     final service = _services.remove(id);
     if (service == null) return;
+    // Disposing hangs it up and drops its exit, so the PTY is kept to
+    // await it: Claude Code gone before the chat resumes the session.
+    final pty = service.active?.pty;
     service.dispose();
     notifyListeners();
-    // ponytail: a fixed beat for Claude Code to go once hung up, not its
-    // exit awaited (disposing drops the PTY's exit); await it if a chat
-    // ever starts before the terminal let the session go.
-    final stopped = _stopping[id] = Future.delayed(
-      const Duration(milliseconds: 500),
-    );
+    final stopped = _stopping[id] = _exited(pty);
     await stopped;
     if (identical(_stopping[id], stopped)) _stopping.remove(id);
+  }
+
+  /// Until [pty]'s process has exited; killed if not within 5 s.
+  static Future<void> _exited(Pty? pty) async {
+    if (pty == null) return;
+    await pty.exitCode.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {
+        pty.kill(PtySignal.kill);
+        return 0;
+      },
+    );
   }
 
   @override
@@ -215,9 +227,15 @@ class _AgentTerminalPaneState extends State<AgentTerminalPane> {
         ),
         Expanded(
           // On a card, as the chat is, its foot's row left empty under it.
-          child: Island(
-            color: const Color(0xFF050505),
-            borderColor: widget.border,
+          // In the theme's terminal background, as its colors are drawn on
+          // (see warpTerminalTheme).
+          child: ValueListenableBuilder(
+            valueListenable: terminalColorTheme,
+            builder: (context, colors, child) => Island(
+              color: colors.background ?? const Color(0xFF050505),
+              borderColor: widget.border,
+              child: child!,
+            ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 0, 0),
               child: ListenableBuilder(
