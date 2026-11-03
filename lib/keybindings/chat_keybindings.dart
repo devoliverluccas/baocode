@@ -452,12 +452,7 @@ final List<KeybindingEntry> chatExtraKeybindings = [
     command: ChatCommandIds.toggleSidePanel,
     when: _window,
   ),
-  const KeybindingEntry(
-    key: 'ctrl+shift+g',
-    mac: 'shift+cmd+g',
-    command: ChatCommandIds.sidePanelChanges,
-    when: _window,
-  ),
+  // No default for sidePanelChanges: the panel opens only when asked.
   const KeybindingEntry(
     key: 'ctrl+shift+e',
     mac: 'shift+cmd+e',

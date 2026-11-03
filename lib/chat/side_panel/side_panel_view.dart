@@ -157,6 +157,14 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
   /// Runs while the room is short: over them once it ends.
   Timer? _short;
 
+  /// Whether it showed at the last build, and whether, as it came to show,
+  /// the width kept was too wide for the room (more than [_mostShare] of
+  /// it): it shows at [AgentSidePanel.defaultWidth] then, until dragged.
+  bool _wasShown = false;
+  bool _tooWide = false;
+
+  static const _mostShare = 0.6;
+
   void _roomShort(bool short) {
     if (!short) {
       _short?.cancel();
@@ -206,7 +214,10 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
 
   /// How wide it shows in [room]: as wide as it was made, as far as there
   /// is room for.
-  double _shownWidth(double room) => math.min(_panel.width, _most(room));
+  double _shownWidth(double room) => math.min(
+    _tooWide ? AgentSidePanel.defaultWidth : _panel.width,
+    _most(room),
+  );
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
@@ -215,6 +226,8 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
       builder: (context, constraints) {
         final room = constraints.maxWidth;
         final shown = _shownHere && !widget.hidden;
+        if (shown && !_wasShown) _tooWide = _panel.width > room * _mostShare;
+        _wasShown = shown;
         // Over the conversations only where it cannot be beside them at
         // its least; else beside them, narrower than it would be where
         // they need the room.
@@ -365,6 +378,10 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
       // the room is short, the sash would wait for the pointer to cover the
       // difference before it moved.
       onHorizontalDragStart: (details) => setState(() {
+        if (_tooWide) {
+          _panel.width = AgentSidePanel.defaultWidth;
+          _tooWide = false;
+        }
         _dragging = true;
         _dragStart = (
           x: details.globalPosition.dx,

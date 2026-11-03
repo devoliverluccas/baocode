@@ -1962,7 +1962,6 @@ void main() {
   ) async {
     final workspace = await pumpLoaded(tester);
     for (final (key, section, shift, alt) in [
-      (LogicalKeyboardKey.keyG, SidePanelSection.changes, true, false),
       (LogicalKeyboardKey.keyE, SidePanelSection.files, true, false),
       (LogicalKeyboardKey.keyT, SidePanelSection.terminal, false, true),
     ]) {
@@ -2342,6 +2341,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(AgentSidePanelView)).width, 520);
 
+    // Kept wider than most of the window: at its default width instead.
+    await tester.pumpWidget(const SizedBox());
+    await pumpLoaded(
+      tester,
+      preferences: MemoryPreferenceStore({
+        'sidePanel': {'shown': true, 'width': 1089.0},
+      }),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byType(AgentSidePanelView)).width,
+      AgentSidePanel.defaultWidth,
+    );
+
     await tester.tap(find.byType(SidePanelToggle));
     await tester.pumpAndSettle();
     expect(find.byType(AgentSidePanelView), findsNothing);
@@ -2407,42 +2420,17 @@ void main() {
   );
 
   testWidgets(
-    'hidden, the panel leaves its rail over the conversation\'s '
-    'top right: the conversation, its title bar and scrollbar, reach the '
-    'edge; its column keeps clear of the rail',
+    'hidden, the panel leaves no rail over the conversation: nothing near '
+    'its scrollbar opens it, the conversation reaches the edge',
     (tester) async {
       final workspace = await pumpLoaded(tester);
-      await tester.pumpAndSettle();
-      expect(find.byType(SidePanelRail), findsNothing);
-
       final existing = workspace.threads.firstWhere(
         (thread) => thread.record != null,
       );
       workspace.select(existing);
       await tester.pumpAndSettle();
-      final chat = tester.getRect(find.byType(ChatScreen));
-      final rail = tester.getRect(find.byType(SidePanelRail));
-      final composer = tester.getRect(find.byType(ChatComposer));
-      // A gap from the window's edge, its card's.
-      expect(chat.right, 1400 - Islands.gap);
-      expect(rail.right, chat.right - AgentSidePanelArea.railRight);
-      expect(composer.right, lessThan(rail.left));
-      // Room enough: the column in the middle, as without the rail.
-      expect(composer.center.dx, closeTo(chat.center.dx, 0.5));
-      // As far under the conversation's title bar as in from its right;
-      // at the top under Windows' header.
-      expect(
-        rail.top - chat.top,
-        (defaultTargetPlatform == TargetPlatform.windows
-                ? 0
-                : AppMetrics.titleBarHeight) +
-            AgentSidePanelArea.railRight,
-      );
-
-      // A narrow window has no room to spare: no rail.
-      tester.view.physicalSize = const Size(700, 900);
-      await tester.pumpAndSettle();
       expect(find.byType(SidePanelRail), findsNothing);
+      expect(tester.getRect(find.byType(ChatScreen)).right, 1400 - Islands.gap);
     },
     variant: TargetPlatformVariant(const {
       TargetPlatform.macOS,

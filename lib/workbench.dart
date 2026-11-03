@@ -3788,22 +3788,6 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         bottom: Islands.belowHeight,
         // Customize, in place of the conversations, isn't one of theirs.
         hidden: _sidePanelHidden || _replacingChat,
-        // Just under the conversation's title bar, whose right has the
-        // window's buttons on macOS; at the top under Windows' header, already
-        // a bar of its own (the title row's right is empty, the rail beside
-        // its column).
-        railTop: WindowControls.drawsHeader
-            ? AgentSidePanelArea.railRight
-            : AppMetrics.titleBarHeight + AgentSidePanelArea.railRight,
-        // Not in a narrow window, where the conversation has no room to spare
-        // (the title bar's toggle shows the panel). Agents side by side have
-        // one each, over their own pane (see [_paneRail]).
-        rail: switch (_agentThread ?? _workspace.current) {
-          final thread?
-              when _agentThread != null || _workspace.grid.length < 2 =>
-            _railFor(thread),
-          _ => null,
-        },
         builder: (context) => switch (_agentThread ?? _workspace.current) {
           final thread?
               when showToggle &&
@@ -3824,44 +3808,6 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         },
         child: child,
       );
-
-  /// [_sidePanelRail] for [thread], where it has one: not in a narrow
-  /// window, in place of the conversations, nor for an agent not begun.
-  Widget? _railFor(AgentThread thread) =>
-      !_narrow && !_replacingChat && !thread.untouched
-      ? _sidePanelRail(thread)
-      : null;
-
-  /// The side panel's quick entries for [thread]'s conversation, counting
-  /// what its pages' bar counts: the changes of its repositories, its
-  /// background commands running. A section picked shows for [thread],
-  /// focused first.
-  Widget _sidePanelRail(AgentThread thread) => ListenableBuilder(
-    listenable: _worktreeSignals(thread),
-    builder: (context, _) => _sidePanelRailOf(thread),
-  );
-
-  Widget _sidePanelRailOf(AgentThread thread) {
-    final multi = _workspace.workspaceAt(thread.project.path);
-    return SidePanelRail(
-      onSelect: (section) {
-        if (_agentThread == null && !identical(thread, _workspace.current)) {
-          _workspace.select(thread);
-        }
-        _showSidePanelSection(section);
-      },
-      session: thread.session,
-      gits: switch (_shownRepositories(
-        thread,
-        multi == null
-            ? _sidePanelFolderRepositories(thread)
-            : _sidePanelRepositories(multi),
-      )) {
-        [] => [?_shownGit(thread)],
-        final repositories => [for (final (_, git) in repositories) git],
-      },
-    );
-  }
 
   Widget _buildSidePanel(
     AgentThread thread, {
@@ -5037,9 +4983,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
 
   /// [chat], a pane among others, with a side panel of its own, of its
   /// agent: beside it on its side, as the window's beside one conversation;
-  /// over it where the pane has not the room. While it is hidden, its rail
-  /// over the pane's top right (left, the panel at the left), under its
-  /// title bar.
+  /// over it where the pane has not the room.
   ///
   /// [top]: the pane is along the window's top, and so is the panel's bar.
   Widget _paneSidePanel(AgentThread thread, Widget chat, {required bool top}) =>
@@ -5048,7 +4992,6 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         conversation: thread.session,
         bottom: Islands.belowHeight,
         hidden: _sidePanelHidden,
-        rail: _railFor(thread),
         builder: (context) => _buildSidePanel(thread, windowTitleBar: top),
         child: chat,
       );

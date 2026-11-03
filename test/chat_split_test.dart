@@ -12,7 +12,6 @@ import 'package:baocode/chat/widgets/inline_rename_field.dart';
 import 'package:baocode/ide/ide_modern_ui.dart';
 import 'package:baocode/ide/ide_workbench.dart';
 import 'package:baocode/main.dart';
-import 'package:baocode/theme/app_theme.dart';
 import 'package:baocode/sidebar/sidebar.dart';
 import 'package:baocode/workspace/islands.dart';
 import 'package:baocode/workspace/chat_drag.dart';
@@ -767,75 +766,6 @@ void main() {
       expect(opened, hasLength(1));
       workspace.layout = WorkspaceLayout.chat;
       await tester.pump();
-    },
-    variant: TargetPlatformVariant(const {
-      TargetPlatform.macOS,
-      TargetPlatform.windows,
-    }),
-  );
-
-  testWidgets(
-    'side by side, each pane has the side panel\'s rail of its own agent, '
-    'under its title bar, clear of its close button; a page picked there '
-    'focuses the pane and shows its agent\'s',
-    (tester) async {
-      // Room for the window's tools in the right pane beside the panel.
-      final workspace = await pumpApp(tester, width: 1800);
-      await dropAgent(tester, second, near(gridRect(tester), PaneSide.right));
-      await tester.tapAt(tester.getRect(pane(second)).center);
-      await tester.pumpAndSettle();
-      expect(workspace.current!.title, second);
-
-      final rails = tester.widgetList(find.byType(SidePanelRail)).toList();
-      expect(rails, hasLength(2));
-      Rect railOf(String title) {
-        final paneRect = tester.getRect(pane(title));
-        return [
-          for (final rail in find.byType(SidePanelRail).evaluate())
-            tester.getRect(find.byWidget(rail.widget)),
-        ].singleWhere((rect) => paneRect.contains(rect.center));
-      }
-
-      for (final title in [first, second]) {
-        final paneRect = tester.getRect(pane(title));
-        final rail = railOf(title);
-        expect(rail.right, paneRect.right - AgentSidePanelArea.railRight);
-        expect(
-          rail.top - paneRect.top,
-          AppMetrics.titleBarHeight + AgentSidePanelArea.railRight,
-        );
-        final close = tester.getRect(
-          find.descendant(
-            of: pane(title),
-            matching: find.bySemanticsLabel('Close pane'),
-          ),
-        );
-        expect(rail.overlaps(close), isFalse);
-      }
-
-      // The left pane's, not focused: it is, and the panel shows its agent.
-      final left = find.byWidgetPredicate(
-        (widget) =>
-            widget is SidePanelRail &&
-            tester
-                .getRect(pane(first))
-                .contains(tester.getCenter(find.byWidget(widget))),
-      );
-      await tester.tap(
-        find
-            .descendant(of: left, matching: find.byType(SidebarIconButton))
-            .first,
-      );
-      await tester.pumpAndSettle();
-      expect(workspace.current!.title, first);
-      final view = tester.widget<AgentSidePanelView>(
-        find.byType(AgentSidePanelView),
-      );
-      expect(view.session, same(workspace.current!.session));
-      // Its own shown, its rail gives way to it; the other pane's, hidden
-      // there, is still there.
-      expect(find.byType(SidePanelRail), findsOneWidget);
-      expect(railOf(second), isNotNull);
     },
     variant: TargetPlatformVariant(const {
       TargetPlatform.macOS,
