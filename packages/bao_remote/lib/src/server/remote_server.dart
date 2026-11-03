@@ -328,7 +328,7 @@ class RemoteServer {
         for (final name in (args['cleared'] as List? ?? const []))
           name as String: '',
         ...?(args['environment'] as Map?)?.cast<String, String>(),
-        ...ClaudeEnvironment.stateDirectory(cli.environment),
+        ...ClaudeEnvironment.stateDirectory(cli.environment, cwd: cwd),
       };
       final arguments = ServerClaude.argumentsFor(
         (args['arguments'] as List).cast<String>(),

@@ -30,12 +30,16 @@ abstract final class ClaudeEnvironment {
   /// The login shell's environment over the app's own.
   static Future<Map<String, String>> of() => _environment ??= _login();
 
-  /// Where Claude Code keeps its state: [dataPathVariable], else
-  /// `CLAUDE_CONFIG_DIR`, else `<home>/.claude`.
+  /// Where Claude Code keeps its state: [dataPathVariable], else the
+  /// [defaultProfile], else `CLAUDE_CONFIG_DIR`, else `<home>/.claude`.
   static Future<String> configDir() async {
     final environment = await of();
-    for (final name in const [dataPathVariable, 'CLAUDE_CONFIG_DIR']) {
-      if (environment[name] case final dir? when dir.isNotEmpty) return dir;
+    if (environment[dataPathVariable] case final dir? when dir.isNotEmpty) {
+      return dir;
+    }
+    if (defaultProfile() case final dir?) return dir;
+    if (environment['CLAUDE_CONFIG_DIR'] case final dir? when dir.isNotEmpty) {
+      return dir;
     }
     final home = AppPaths.home(environment);
     return home.isEmpty ? '' : p.join(home, '.claude');
@@ -54,9 +58,24 @@ abstract final class ClaudeEnvironment {
         return {'CLAUDE_CONFIG_DIR': profile};
       }
     }
-    final dir = environment[dataPathVariable];
-    return dir == null || dir.isEmpty ? const {} : {'CLAUDE_CONFIG_DIR': dir};
+    final dir = environment[dataPathVariable] ?? '';
+    if (dir.isNotEmpty) return {'CLAUDE_CONFIG_DIR': dir};
+    if (defaultProfile() case final profile?) {
+      return {'CLAUDE_CONFIG_DIR': profile};
+    }
+    return const {};
   }
+
+  /// The key in [profilesFile] of the profile for what is in no project
+  /// that has one (titles, the Stash, folders of no company): `~/.claude`
+  /// is not always logged in.
+  static const defaultProfileKey = '*';
+
+  /// The profile for what has none of its own; null: Claude Code's own.
+  static String? defaultProfile() => switch (profiles()[defaultProfileKey]) {
+    final dir? when dir.isNotEmpty && Directory(dir).existsSync() => dir,
+    _ => null,
+  };
 
   /// Where the profile picked for each project is kept, as
   /// `{folder: config dir}`: which Claude Code (`~/.claude-promov`,

@@ -17,12 +17,32 @@ void main() {
       ClaudeEnvironment.profileFor(p.join(project, 'api')),
       '/home/.claude-promov',
     );
-    expect(
-      ClaudeEnvironment.stateDirectory(const {}, cwd: project),
-      {'CLAUDE_CONFIG_DIR': '/home/.claude-promov'},
-    );
+    expect(ClaudeEnvironment.stateDirectory(const {}, cwd: project), {
+      'CLAUDE_CONFIG_DIR': '/home/.claude-promov',
+    });
     ClaudeEnvironment.setProfile(project, '/home/.claude-stark');
     expect(ClaudeEnvironment.profiles(), {project: '/home/.claude-stark'});
     expect(ClaudeEnvironment.profileFor(dir.path), isNull);
+  });
+
+  test('what has no profile runs with the default one, when there is', () {
+    final dir = Directory.systemTemp.createTempSync('profiles');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    ClaudeEnvironment.profilesFile = p.join(dir.path, 'claude-profiles.json');
+    addTearDown(() => ClaudeEnvironment.profilesFile = null);
+    expect(ClaudeEnvironment.stateDirectory(const {}), isEmpty);
+    final fallback = Directory(p.join(dir.path, '.claude-promov'))
+      ..createSync();
+    ClaudeEnvironment.setProfile(
+      ClaudeEnvironment.defaultProfileKey,
+      fallback.path,
+    );
+    expect(ClaudeEnvironment.stateDirectory(const {}), {
+      'CLAUDE_CONFIG_DIR': fallback.path,
+    });
+    expect(
+      ClaudeEnvironment.stateDirectory(const {}, cwd: p.join(dir.path, 'x')),
+      {'CLAUDE_CONFIG_DIR': fallback.path},
+    );
   });
 }
