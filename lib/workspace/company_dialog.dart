@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../ide/ide_menu.dart';
 import '../kernel/claude_code/claude_environment.dart';
 import '../l10n/l10n.dart';
 import '../theme/app_theme.dart';
@@ -60,6 +63,69 @@ String withPlace(Project project, String title) => switch (placeOf(project)) {
   final place? => '$place  ·  $title',
   null => title,
 };
+
+/// In place of where a project is when it is in no company: that it runs
+/// with the default Claude account, a click putting it in a company (an
+/// existing one, or a new one).
+class NoCompanyNotice extends StatelessWidget {
+  const NoCompanyNotice({super.key, required this.path, this.style});
+
+  final String path;
+  final TextStyle? style;
+
+  void _menu(BuildContext context, Rect anchor) {
+    final companies = Companies.instance;
+    unawaited(
+      showIdeMenu(
+        context,
+        anchor: anchor,
+        entries: [
+          for (final company in companies.list)
+            IdeMenuAction(
+              company.name,
+              icon: companyIconOf(company),
+              onSelected: () => companies.assign(path, company.name),
+            ),
+          if (companies.list.isNotEmpty) const IdeMenuSeparator(),
+          IdeMenuAction(
+            context.l10n.companyNew,
+            icon: const Icon(Icons.add),
+            onSelected: () async {
+              if (!context.mounted) return;
+              final name = await editCompany(context);
+              if (name != null) companies.assign(path, name);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return Tooltip(
+      message: l10n.companyNoneTooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () {
+            final box = context.findRenderObject()! as RenderBox;
+            _menu(context, box.localToGlobal(Offset.zero) & box.size);
+          },
+          child: Text(
+            '${l10n.companyNone}  ·  ',
+            maxLines: 1,
+            style: (style ?? const TextStyle()).copyWith(
+              color: AppColors.textFaint,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// Asks which company [path] is in, a new one if need be, and puts it there
 /// (to run with its Claude). Asked only when it is in none yet, unless

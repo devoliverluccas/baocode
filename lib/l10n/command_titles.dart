@@ -129,6 +129,7 @@ String localizedCommandLabel(AppLocalizations l10n, String id, String english) {
     ChatCommandIds.newChat => l10n.cmdChatNewAgent,
     ChatCommandIds.closePane => l10n.cmdChatClosePane,
     ChatCommandIds.nextAgent => l10n.cmdChatNextAgent,
+    ChatCommandIds.nextNeedingYou => l10n.cmdChatNextNeedingYou,
     ChatCommandIds.previousAgent => l10n.cmdChatPreviousAgent,
     final String agent
         when ChatCommandIds.indexOf(agent, ChatCommandIds.openAgentAtIndex) !=

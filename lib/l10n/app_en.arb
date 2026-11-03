@@ -8681,5 +8681,8 @@
       "path": {"type": "String"}
     }
   },
-  "addDirNeedsMessage": "Send a message first: the folder is kept with the conversation."
+  "addDirNeedsMessage": "Send a message first: the folder is kept with the conversation.",
+  "cmdChatNextNeedingYou": "Go to Next Agent Needing You",
+  "companyNone": "Default account",
+  "companyNoneTooltip": "This project is in no company: it runs with the default Claude account. Click to put it in one."
 }

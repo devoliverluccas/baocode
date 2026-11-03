@@ -70,6 +70,7 @@ class ChatScreen extends StatefulWidget {
     super.key,
     this.title = 'Optimize virtual list scrolling',
     this.place,
+    this.placeHint,
     this.session,
     this.leading,
     this.trailing,
@@ -112,6 +113,10 @@ class ChatScreen extends StatefulWidget {
 
   /// Where the agent works, before [title]: `LUNAR › hub-lunar`.
   final String? place;
+
+  /// In place of [place] when it has none, e.g. that the project is in no
+  /// company.
+  final Widget? placeHint;
   final ChatSession? session;
 
   /// Before the title, e.g. a button to show the sidebar.
@@ -664,7 +669,16 @@ class _ChatScreenState extends State<ChatScreen>
               Flexible(child: HoverScrollText(widget.title, style: style)),
             ],
           ),
-          null => HoverScrollText(widget.title, style: style),
+          null => switch (widget.placeHint) {
+            final hint? => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                hint,
+                Flexible(child: HoverScrollText(widget.title, style: style)),
+              ],
+            ),
+            null => HoverScrollText(widget.title, style: style),
+          },
         },
       );
       // A pane's title drags the pane; the chat's alone, the window, as the

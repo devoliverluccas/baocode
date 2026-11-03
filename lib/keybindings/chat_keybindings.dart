@@ -55,6 +55,9 @@ abstract final class ChatCommandIds {
   static const nextAgent = 'baocode.chat.nextAgent';
   static const previousAgent = 'baocode.chat.previousAgent';
 
+  /// The next agent waiting on the user, then those finished unread.
+  static const nextNeedingYou = 'baocode.chat.nextNeedingYou';
+
   /// Followed by 1 to 9: the agent at that place in the sidebar.
   static const openAgentAtIndex = 'baocode.chat.openAgentAtIndex';
 
@@ -214,6 +217,7 @@ final List<CommandInfo> chatExtraCommands = [
     (ChatCommandIds.closePane, 'Close Pane'),
     (ChatCommandIds.nextAgent, 'Open Next Agent'),
     (ChatCommandIds.previousAgent, 'Open Previous Agent'),
+    (ChatCommandIds.nextNeedingYou, 'Go to Next Agent Needing You'),
     for (var i = 1; i <= ChatCommandIds.agentIndexes; i++)
       ('${ChatCommandIds.openAgentAtIndex}$i', 'Open Agent at Index $i'),
     for (var i = 1; i <= ChatCommandIds.paneIndexes; i++)
@@ -443,6 +447,12 @@ final List<KeybindingEntry> chatExtraKeybindings = [
   const KeybindingEntry(
     key: 'f2',
     command: ChatCommandIds.renameAgent,
+    when: _window,
+  ),
+  const KeybindingEntry(
+    key: 'ctrl+alt+j',
+    mac: 'alt+cmd+j',
+    command: ChatCommandIds.nextNeedingYou,
     when: _window,
   ),
   // As upstream's Toggle Secondary Side Bar (the IDE's chat there).

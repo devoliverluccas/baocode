@@ -121,6 +121,7 @@ import 'window/app_windows.dart';
 import 'window/code_args.dart';
 import 'window/window_settings.dart';
 import 'remote/open_remote.dart';
+import 'workspace/companies.dart';
 import 'workspace/company_dialog.dart';
 import 'remote/project_host.dart';
 import 'remote/remote_customization_disk.dart';
@@ -562,11 +563,17 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     if (mounted) setState(() {});
   }
 
+  /// A company changed, or a project moved to one: the titles' places.
+  void _companiesChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleKey);
     _keybindings.addListener(_keybindingsChanged);
+    Companies.instance.addListener(_companiesChanged);
     // The window's own channels: its menu bar's commands (the key window's,
     // on macOS), its Edit menu, its buttons, the files dropped on it.
     WindowControls.setMenuCommands(_viewId, _runMenuCommand);
@@ -860,6 +867,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     }
     HardwareKeyboard.instance.removeHandler(_handleKey);
     _keybindings.removeListener(_keybindingsChanged);
+    Companies.instance.removeListener(_companiesChanged);
     // The window's channels stay: a folder replaced builds the next
     // workbench before this one goes, and AppWindows stops them with the
     // window.
@@ -994,6 +1002,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       if (agents.isNotEmpty) ...{
         ChatCommandIds.nextAgent: () => _openAgentBy(1),
         ChatCommandIds.previousAgent: () => _openAgentBy(-1),
+        ChatCommandIds.nextNeedingYou: _openNextNeedingYou,
       },
       for (final (index, thread)
           in agents.take(ChatCommandIds.agentIndexes).indexed)
@@ -1218,6 +1227,23 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         ? (step > 0 ? 0 : threads.length - 1)
         : (at + step) % threads.length;
     _openAgent(threads[next]);
+  }
+
+  /// Opens the next agent that needs the user: one waiting on an answer,
+  /// then one that finished unread, in the sidebar's order (folded ones
+  /// after those listed).
+  void _openNextNeedingYou() {
+    final listed = _agentsInOrder();
+    final next = nextNeedingYou(
+      [
+        ...listed,
+        for (final thread in _workspace.threads)
+          if (!thread.archived && !listed.contains(thread)) thread,
+      ],
+      _workspace.current,
+      (thread) => thread.status,
+    );
+    if (next != null) _openAgent(next);
   }
 
   /// The panes beside [current] each way, and its tabs: only those there
@@ -4678,6 +4704,9 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         session: thread.session,
         title: thread.localizedTitle(context.l10n),
         place: placeOf(thread.project),
+        placeHint: thread.project.host == null
+            ? NoCompanyNotice(path: thread.project.path)
+            : null,
         autofocus: thread.session.itemCount == 0,
         onRename: (title) => _workspace.rename(thread, title),
         onSummarizeTitle: () => _workspace.summarizeTitle(thread),
