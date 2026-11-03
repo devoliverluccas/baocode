@@ -418,10 +418,9 @@ void main() {
     final thread = workspace.selected;
     expect(thread.kernel, MockKernels.codex);
     expect(picker('Codex'), findsOneWidget);
-    expect(picker('GPT-5.5 Codex'), findsOneWidget);
 
-    // Codex has no Plan mode.
-    await tester.tap(picker('Agent'));
+    // Codex has no Plan mode; it starts in full access.
+    await tester.tap(picker('Full access'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Read-only: answer questions'), findsOneWidget);
     expect(find.text('Plan'), findsNothing);
@@ -432,6 +431,8 @@ void main() {
     thread.session.send(const ComposerMessage(text: '看一下输入框'));
     await tester.pump();
     expect(picker('Codex'), findsNothing);
+    // Its models, as the server lists them once started.
+    expect(picker('GPT-5.5 Codex'), findsOneWidget);
 
     // The next new agent starts with it.
     await tester.tap(

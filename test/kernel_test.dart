@@ -6045,6 +6045,8 @@ exec /usr/bin/env "\$@"
       await pumpEventQueue();
       expect(server.written.map((m) => m['method']), [
         'initialize',
+        'initialized',
+        'model/list',
         'thread/start',
         'turn/start',
       ]);

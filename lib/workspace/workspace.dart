@@ -631,6 +631,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       thread.id != null &&
       thread.project.host == null &&
       thread._kernel.catalog != null &&
+      thread._kernel.id == 'claude-code' &&
       thread.status != ThreadStatus.running;
 
   /// [thread] to the terminal, or back. To it, its session is closed (its
