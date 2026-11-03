@@ -75,6 +75,7 @@ Future<String> askClaudeHaiku(
       images: images,
       tools: tools,
       session: session,
+      location: location,
     );
   }
   final (provider, info) = custom;
@@ -107,6 +108,7 @@ Future<String> askClaudeHaiku(
     env: env,
     images: images,
     tools: tools,
+    location: location,
   );
 }
 

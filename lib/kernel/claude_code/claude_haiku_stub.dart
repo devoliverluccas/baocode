@@ -11,6 +11,7 @@ Future<String> askClaudeHaiku(
   List<({String name, ImageAttachment image})> images = const [],
   ClaudeHaikuTools? tools,
   String? session,
+  String? location,
 }) async => throw const ClaudeHaikuException(
   'This needs Claude Code, which the web cannot run.',
 );

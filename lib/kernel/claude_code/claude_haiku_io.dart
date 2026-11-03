@@ -33,6 +33,7 @@ Future<String> askClaudeHaiku(
   List<({String name, ImageAttachment image})> images = const [],
   ClaudeHaikuTools? tools,
   String? session,
+  String? location,
 }) async {
   void kept(String line) {
     if (env != null || !line.contains('"result"')) return;
@@ -63,6 +64,7 @@ Future<String> askClaudeHaiku(
       stream: true,
       message: true,
       tools: tools,
+      location: location,
       onLine: (line) {
         timer.add(line, clock.elapsed);
         kept(line);
@@ -78,6 +80,7 @@ Future<String> askClaudeHaiku(
     model: model,
     env: env,
     tools: tools,
+    location: location,
     stream: false,
     onLine: (line) {
       stdout.writeln(line);
@@ -122,6 +125,7 @@ Future<(String, int)> _run(
   required void Function(String line) onLine,
   bool message = false,
   ClaudeHaikuTools? tools,
+  String? location,
   void Function()? onStart,
 }) async {
   if (ClaudeCore.current() == ClaudeCore.builtin) {
@@ -134,6 +138,7 @@ Future<(String, int)> _run(
       stream: stream,
       message: message,
       tools: tools,
+      location: location,
       onLine: onLine,
       onStart: onStart,
     );
@@ -177,7 +182,8 @@ Future<(String, int)> _run(
           for (final name in ClaudeModelVariables.inherited) name: '',
         ...ClaudeEnvironment.stateDirectory(
           cli.environment,
-          cwd: tools?.directory,
+          // The project's profile: its account, not the default's.
+          cwd: tools?.directory ?? location,
         ),
       },
       includeParentEnvironment: Platform.isWindows,
@@ -235,6 +241,7 @@ Future<(String, int)> _runBuiltin(
   required bool stream,
   required bool message,
   required ClaudeHaikuTools? tools,
+  String? location,
   required void Function(String line) onLine,
   void Function()? onStart,
 }) async {
@@ -247,7 +254,7 @@ Future<(String, int)> _runBuiltin(
     }
   }
   environment.addAll(
-    ClaudeEnvironment.stateDirectory(base, cwd: tools?.directory),
+    ClaudeEnvironment.stateDirectory(base, cwd: tools?.directory ?? location),
   );
   final options = EngineOptions(
     // Elsewhere than a project, unless it is to look at one.
