@@ -473,7 +473,9 @@ Future<void> main(List<String> arguments) async {
       catalog: catalog,
       sync: sync,
       installs: VsCodeInstalls.current(),
-      updates: _startUpdates(files),
+      // Fork pessoal: nunca se atualiza pelo baocode.dev (sobrescreveria
+      // as personalizações).
+      updates: null,
       diagnostics: DiagnosticsUploader.platform(),
       workspace: workspace,
       claudeStatus: localClaudeStatus,
@@ -538,6 +540,7 @@ Future<void> main(List<String> arguments) async {
 /// The app's updates (lib/update/): looked for as settings.json's
 /// `update.mode` says, from baocode.dev, installed as the app quits. None
 /// where the build does not update itself.
+// ignore: unused_element
 UpdateController? _startUpdates(SettingsFiles files) {
   final platform = platformUpdates(
     updatesDirectory: DataDirectory.current.updatesDir,
