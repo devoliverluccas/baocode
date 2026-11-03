@@ -100,7 +100,15 @@ class CodexProcessTransport implements CodexTransport {
         // An npm shim is a `.cmd`, which only the shell can run.
         runInShell: p.extension(executable).toLowerCase() == '.cmd',
       );
-      frame(process.stdout).listen(_messages.add, onDone: () => _ended(null));
+      // Closed, what it still prints as it is killed is for no one.
+      frame(process.stdout).listen(
+        (message) {
+          if (!_closed) _messages.add(message);
+        },
+        onDone: () => _ended(null),
+      );
+      // A write to it gone fails there: [codexExited] says so.
+      unawaited(process.stdin.done.catchError((_) {}));
       process.stderr
           .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())

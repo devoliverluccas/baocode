@@ -104,7 +104,6 @@ class AgentSetup {
   final Map<String, String> settings;
 }
 
-/// What an agent needs from the user, most urgent first.
 /// Why `/add-dir` added no folder (see [Workspace.addDirectory]).
 enum AddDirFailure {
   /// The conversation has no session yet to keep it with.
@@ -114,6 +113,7 @@ enum AddDirFailure {
   notFound,
 }
 
+/// What an agent needs from the user, most urgent first.
 enum ThreadStatus {
   /// Stopped on a question only the user can answer.
   needsInput,

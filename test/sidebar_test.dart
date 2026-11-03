@@ -24,6 +24,7 @@ import 'package:baocode/sidebar/sidebar_times.dart';
 import 'package:baocode/theme/code_font.dart';
 import 'package:baocode/theme/codicons.dart';
 import 'package:baocode/theme/workbench_theme.dart';
+import 'package:baocode/workspace/company_dialog.dart' show NoCompanyNotice;
 import 'package:baocode/workspace/chat_grid_view.dart';
 import 'package:baocode/workspace/chat_drag.dart';
 import 'package:baocode/workspace/editor_launcher.dart';
@@ -1046,13 +1047,14 @@ void main() {
     await tester.pump();
     expect(thread.title, 'Quota');
 
-    // The title bar's title at its left, not the conversation's column.
+    // The title bar's title at its left, not the conversation's column:
+    // after where it is, its project in no company.
     final title = find.descendant(
       of: find.byType(ChatScreen),
       matching: find.text('Quota'),
     );
     expect(
-      tester.getTopLeft(title).dx,
+      tester.getTopLeft(find.byType(NoCompanyNotice)).dx,
       tester.getTopLeft(find.byType(ChatScreen)).dx + 12,
     );
     await tester.tap(title);

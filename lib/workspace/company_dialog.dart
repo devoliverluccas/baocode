@@ -116,6 +116,7 @@ class NoCompanyNotice extends StatelessWidget {
           child: Text(
             '${l10n.companyNone}  ·  ',
             maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: (style ?? const TextStyle()).copyWith(
               color: AppColors.textFaint,
               fontStyle: FontStyle.italic,

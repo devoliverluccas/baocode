@@ -661,10 +661,14 @@ class _ChatScreenState extends State<ChatScreen>
           final place? => Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '$place  ·  ',
-                maxLines: 1,
-                style: style.copyWith(color: AppColors.textFaint),
+              // Narrow, it gives way to the title as much as it takes.
+              Flexible(
+                child: Text(
+                  '$place  ·  ',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style.copyWith(color: AppColors.textFaint),
+                ),
               ),
               Flexible(child: HoverScrollText(widget.title, style: style)),
             ],
@@ -673,7 +677,7 @@ class _ChatScreenState extends State<ChatScreen>
             final hint? => Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                hint,
+                Flexible(child: hint),
                 Flexible(child: HoverScrollText(widget.title, style: style)),
               ],
             ),
