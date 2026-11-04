@@ -13012,6 +13012,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get officeNeedsYou => '需要你';
 
   @override
+  String get officeToastReady => '完成';
+
+  @override
+  String get officeToastOpen => '打开';
+
+  @override
   String get officeThinking => '思考中…';
 
   @override

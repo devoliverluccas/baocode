@@ -22401,6 +22401,18 @@ abstract class AppLocalizations {
   /// **'needs you'**
   String get officeNeedsYou;
 
+  /// In the in-app toast when an agent ends its turn: project · title: ready
+  ///
+  /// In en, this message translates to:
+  /// **'ready'**
+  String get officeToastReady;
+
+  /// The in-app toast's button opening the agent's conversation
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get officeToastOpen;
+
   /// No description provided for @officeThinking.
   ///
   /// In en, this message translates to:

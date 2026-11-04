@@ -13859,6 +13859,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get officeNeedsYou => 'precisa de você';
 
   @override
+  String get officeToastReady => 'pronto';
+
+  @override
+  String get officeToastOpen => 'Abrir';
+
+  @override
   String get officeThinking => 'pensando…';
 
   @override

@@ -3741,6 +3741,8 @@
   "officeNextFloor": "Próximo andar",
   "officeDoneOpen": "pronto — abrir",
   "officeNeedsYou": "precisa de você",
+  "officeToastReady": "pronto",
+  "officeToastOpen": "Abrir",
   "officeThinking": "pensando…",
   "officeUsing": "usando {name}",
   "officeWorkflow": "workflow {name}",

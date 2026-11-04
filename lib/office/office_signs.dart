@@ -10,6 +10,7 @@ import '../workspace/company_dialog.dart' show assignMenu;
 import '../workspace/workspace.dart';
 import 'office_painter.dart';
 import 'office_scoreboard.dart';
+import 'office_theme.dart';
 
 /// What the canvas cannot paint, laid over it where [geometry] puts it at
 /// [unit] logical pixels a sprite's pixel: each room's project icon, and
@@ -31,8 +32,8 @@ class CampusSigns extends StatelessWidget {
   /// over its roof.
   final Map<String, OfficeScore> scores;
 
-  /// A room sign's icon, in logical pixels: on its name's strip
-  /// ([CampusPainter.labelHeight]).
+  /// A room's project icon, at its largest, in logical pixels: on its
+  /// door's plaque ([OfficeTheme.plaque]).
   static const iconSide = 14.0;
 
   @override
@@ -61,26 +62,44 @@ class CampusSigns extends StatelessWidget {
               ),
             ),
           ),
+        // Each room's project icon on its door's plaque (see RoomScene.paint),
+        // else its initial.
         for (final room in building.rooms)
-          if (workspace.iconOf(room.room.project) case final icon?
-              when !room.card)
-            Positioned(
-              // Left of the "❗" of someone waiting not shown.
-              left:
-                  room.rect.right * unit -
-                  iconSide -
-                  (room.room.waiting && !room.all ? 26 : 5),
-              top:
-                  room.rect.top * unit +
-                  (CampusPainter.labelHeight - iconSide) / 2,
-              child: IgnorePointer(
-                child: ProjectIconView(
-                  icon: icon,
-                  library: workspace.icons,
-                  size: iconSide,
+          if (!room.card)
+            if (OfficeTheme.plaque(room.rect.topLeft) case final plaque)
+              Positioned(
+                left: plaque.left * unit,
+                top: plaque.top * unit,
+                width: plaque.width * unit,
+                height: plaque.height * unit,
+                child: IgnorePointer(
+                  child: Center(
+                    child: switch (workspace.iconOf(room.room.project)) {
+                      final icon? => ProjectIconView(
+                        icon: icon,
+                        library: workspace.icons,
+                        size: (plaque.height * unit - 3).clamp(8, iconSide),
+                      ),
+                      null => Text(
+                        room.room.project.name.characters.first.toUpperCase(),
+                        style: TextStyle(
+                          color: CampusPainter.inkOn(
+                            switch (building.building.company) {
+                              final company? => Color(
+                                company.color ?? 0xff8e8e93,
+                              ),
+                              null => const Color(0xffc9a227),
+                            },
+                          ),
+                          fontSize: (plaque.height * unit - 4).clamp(7, 12),
+                          fontWeight: FontWeight.w700,
+                          height: 1,
+                        ),
+                      ),
+                    },
+                  ),
                 ),
               ),
-            ),
         if (building.building.company == null)
           Positioned(
             right: (geometry.size.width - building.sign.right + 3) * unit,

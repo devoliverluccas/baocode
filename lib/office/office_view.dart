@@ -41,7 +41,11 @@ class OfficeView extends StatefulWidget {
     this.titleBarInset = 12,
     this.island,
     this.scenes,
+    this.room,
   });
+
+  /// The room to open at (level 3), if it has one: the mini office's.
+  final Project? room;
 
   final Workspace workspace;
 
@@ -72,7 +76,7 @@ class OfficeViewState extends State<OfficeView> {
   /// The building in view (by name, as the campus is built anew each
   /// time), and its room: null for the level above.
   String? _building;
-  Project? _room;
+  late Project? _room = widget.room;
 
   /// The character under the pointer, and where the pointer is.
   OfficeAgent? _hovered;
@@ -203,6 +207,14 @@ class OfficeViewState extends State<OfficeView> {
           Companies.instance,
           noCompany: l10n.officeNoCompany,
         );
+        // Opened at a room: its building's, if it is in one.
+        if (_building == null && _room != null) {
+          _building = campus.buildings
+              .where((b) => roomsOf(b).any((r) => r.project == _room))
+              .firstOrNull
+              ?.name;
+          if (_building == null) _room = null;
+        }
         // Gone (hidden, emptied) since: the level above it.
         final building = campus.buildings
             .where((b) => b.name == _building)

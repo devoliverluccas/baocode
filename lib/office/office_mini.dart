@@ -17,7 +17,8 @@ import 'office_view.dart' show officeColors;
 
 /// The office small in the chat's corner: the room of [project] when it
 /// has one in the Ativas, else the whole campus; the same [scenes] as the
-/// office's, its bubbles their icon alone. A click opens the office.
+/// office's, its bubbles their icon alone. A click opens the office, at
+/// [project]'s room if it has one.
 class MiniOffice extends StatefulWidget {
   const MiniOffice({
     super.key,

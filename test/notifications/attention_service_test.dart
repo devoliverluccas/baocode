@@ -77,6 +77,7 @@ void main() {
   var settings = const AttentionSettings();
   var focused = true;
   final opened = <AgentThread>[];
+  final toasts = <String>[];
 
   void start() {
     workspace = Workspace.mock();
@@ -87,6 +88,7 @@ void main() {
       settings: () => settings,
       l10n: () => englishLocalizations,
       onOpen: opened.add,
+      toast: (_, message) => toasts.add(message),
       focused: () => focused,
     )..start();
     addTearDown(service.dispose);
@@ -96,6 +98,7 @@ void main() {
     settings = const AttentionSettings();
     focused = true;
     opened.clear();
+    toasts.clear();
   });
 
   testWidgets('notifies of a background agent that asks, then finishes', (
@@ -127,6 +130,11 @@ void main() {
     expect(background.status, ThreadStatus.unread);
     expect(host.notifications, hasLength(2));
     expect(host.notifications.last.body, startsWith('Finished'));
+    // In the window too, by its project.
+    expect(toasts, [
+      '${background.project.name} · Rate limit per API key: needs you',
+      '${background.project.name} · Rate limit per API key: ready',
+    ]);
     // A finish does not bounce the Dock icon.
     expect(host.attentionRequests, 1);
     expect(host.badge, 2);

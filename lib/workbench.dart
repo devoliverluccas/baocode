@@ -553,6 +553,18 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           l10n: () => context.l10n,
           // The office covering the chat, it is not in view (chatCovered).
           shown: _workspace.isShown,
+          toast: (thread, message) => _notifications.notify(
+            IdeSeverity.info,
+            message,
+            primary: [
+              IdeNotificationAction(
+                context.l10n.officeToastOpen,
+                () => _windows != null
+                    ? _windows!.showAgent(thread)
+                    : _openNotifiedAgent(thread),
+              ),
+            ],
+          ),
           onOpen: (thread) => _windows != null
               ? _windows!.showAgent(thread)
               : _openNotifiedAgent(thread),
@@ -1365,14 +1377,17 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   }
 
   bool _officeShown = false;
+  Project? _officeRoom;
 
   /// The office's characters, kept while it is closed: opened again, who
   /// was in is where it was (and the mini office's, the same).
   final _officeScenes = OfficeScenes();
 
-  void _showOffice() {
+  /// The office, at [room] (level 3) if it has one.
+  void _showOffice({Project? room}) {
     _closeDrawer();
     setState(() {
+      _officeRoom = room;
       _office = true;
       _customizing = _stashing = false;
     });
@@ -4403,7 +4418,8 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
               workspace: _workspace,
               scenes: _officeScenes,
               project: _workspace.current?.project,
-              onOpen: _showOffice,
+              // Straight into its room.
+              onOpen: () => _showOffice(room: _workspace.current?.project),
             ),
           ),
       ],
@@ -4441,6 +4457,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     return OfficeView(
       workspace: _workspace,
       scenes: _officeScenes,
+      room: _officeRoom,
       onClose: _closeCustomize,
       onOpenAgent: _openAgent,
       island: AppColors.conversationSurface,

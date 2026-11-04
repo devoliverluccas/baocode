@@ -3695,6 +3695,8 @@
   "officeNextFloor": "下一层",
   "officeDoneOpen": "完成 — 打开",
   "officeNeedsYou": "需要你",
+  "officeToastReady": "完成",
+  "officeToastOpen": "打开",
   "officeThinking": "思考中…",
   "officeUsing": "使用 {name}",
   "officeWorkflow": "工作流 {name}",

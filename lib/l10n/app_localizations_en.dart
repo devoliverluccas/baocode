@@ -13763,6 +13763,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get officeNeedsYou => 'needs you';
 
   @override
+  String get officeToastReady => 'ready';
+
+  @override
+  String get officeToastOpen => 'Open';
+
+  @override
   String get officeThinking => 'thinking…';
 
   @override

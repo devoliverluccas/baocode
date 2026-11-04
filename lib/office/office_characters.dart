@@ -8,6 +8,7 @@ import 'office_layout.dart';
 import 'office_model.dart';
 import 'office_painter.dart';
 import 'office_sprites.dart';
+import 'office_theme.dart';
 
 /// What a character does where it gets to.
 enum _Pose { sit, stand }
@@ -438,7 +439,13 @@ class RoomScene {
     Color? badge,
     int tick = 0,
     bool small = false,
+    OfficeTheme? theme,
   }) {
+    if (theme != null) {
+      floor = theme.floor;
+      floorTint = theme.floorTint;
+      wallTint = theme.wallTint;
+    }
     final o = origin(topLeft);
     const t = OfficeLayout.tile;
     Offset at(Tile tile) => o + Offset(tile.col * t, tile.row * t);
@@ -470,17 +477,33 @@ class RoomScene {
         }
       }
     }
+    // The door's plaque: the project's icon goes on it (CampusSigns).
+    final plaque = OfficeTheme.plaque(topLeft);
+    final brass = theme?.accent ?? const Color(0xffc9a227);
+    canvas
+      ..drawRect(plaque, Paint()..color = OfficeTheme.shade(brass, 0.5))
+      ..drawRect(plaque.deflate(1), Paint()..color = brass);
+    if (theme != null) {
+      theme
+        ..paintRug(canvas, o)
+        ..paintWall(canvas, topLeft, tick);
+    }
     final characters = this.characters;
     // Back to front: by where each stands; a seat under who sits on it.
     final drawables = <(double, void Function())>[
       // Pieces at one depth in the layout's order (a PC on its desk).
       for (final (i, piece) in layout.pieces.indexed)
-        (
-          piece.onWall
-              ? -1.0 + i / 100
-              : (piece.tile.row + (piece.seat ? 0 : 1)) * t - 1 + i / 100,
-          () => _paintPiece(canvas, piece, at, sprites, characters, tick),
-        ),
+        // A company's own pictures on the wall in place of these, the
+        // bookshelf kept.
+        if (theme == null ||
+            !piece.onWall ||
+            piece.asset == 'DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF')
+          (
+            piece.onWall
+                ? -1.0 + i / 100
+                : (piece.tile.row + (piece.seat ? 0 : 1)) * t - 1 + i / 100,
+            () => _paintPiece(canvas, piece, at, sprites, characters, tick),
+          ),
       for (final character in characters)
         (
           character.position.dy,

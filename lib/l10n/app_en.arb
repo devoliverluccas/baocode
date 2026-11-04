@@ -8730,6 +8730,14 @@
   "officeNextFloor": "Next floor",
   "officeDoneOpen": "done — open",
   "officeNeedsYou": "needs you",
+  "officeToastReady": "ready",
+  "@officeToastReady": {
+    "description": "In the in-app toast when an agent ends its turn: project · title: ready"
+  },
+  "officeToastOpen": "Open",
+  "@officeToastOpen": {
+    "description": "The in-app toast's button opening the agent's conversation"
+  },
   "officeThinking": "thinking…",
   "officeUsing": "using {name}",
   "@officeUsing": {

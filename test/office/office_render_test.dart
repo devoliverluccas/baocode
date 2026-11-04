@@ -35,9 +35,10 @@ void main() {
       }
       final sprites = await OfficeSprites.load();
 
-      const lunar = Company('LUNAR', '/lu', color: 0xffaf52de);
-      const promov = Company('PROMOV', '/p', color: 0xffffcc00);
-      const stark = Company('STARK', '/s', color: 0xffff453a);
+      // As in the user's companies.json.
+      const lunar = Company('LUNAR', '/lu', color: 0xffba68c8, icon: 'moon');
+      const promov = Company('PROMOV', '/p', color: 0xffffd54f, icon: 'work');
+      const stark = Company('STARK', '/s', color: 0xfff06292, icon: 'rocket');
       const hub = Project('hub-lunar', '/lu/hub-lunar');
       const hermanitos = Project('Hermanitos', '/lu/hermanitos');
       const shopp = Project('RM Shopp (Ecommerce)', '/lu/rm-shopp');
@@ -242,7 +243,7 @@ void main() {
             CampusGeometry.of(office, columns: o.$1, perRow: o.$2),
         campusOptions(office.buildings.length),
         5,
-        'office_v4_level1.png',
+        'office_themes_level1.png',
       );
       for (final (i, building) in office.buildings.take(2).indexed) {
         await fit(
@@ -266,6 +267,18 @@ void main() {
         8,
         'office_v4_level3.png',
       );
+      for (final (name, building) in [
+        ('lunar', lunarBuilding),
+        ('promov', office.buildings[1]),
+        ('stark', office.buildings[2]),
+      ]) {
+        await fit(
+          (_, _) => CampusGeometry.room(building, building.rooms.first),
+          const [0],
+          8,
+          'office_themes_level3_$name.png',
+        );
+      }
       final hubRoom = lunarBuilding.rooms.firstWhere((r) => r.project == hub);
       await fit(
         (_, _) => CampusGeometry.room(lunarBuilding, hubRoom),

@@ -25,6 +25,7 @@ class AttentionService {
     required this.onOpen,
     this.settingsChanges,
     this.shown,
+    this.toast,
     bool Function()? focused,
   }) : _focused = focused ?? _windowFocused;
 
@@ -40,6 +41,10 @@ class AttentionService {
   /// Whether an agent shows in the window (in the IDE's chat too); by
   /// default, whether it is in one of the chat's panes.
   final bool Function(AgentThread thread)? shown;
+
+  /// Shows [message] in the window too, besides the system's notification
+  /// (the app's toasts): `hub-lunar · Title: ready`.
+  final void Function(AgentThread thread, String message)? toast;
 
   /// The app's language now.
   final AppLocalizations Function() l10n;
@@ -225,6 +230,11 @@ class AttentionService {
         title: thread.localizedTitle(l10n),
         body: body,
       ),
+    );
+    toast?.call(
+      thread,
+      '${thread.project.name} · ${thread.localizedTitle(l10n)}: '
+      '${event == AttentionEvent.needsInput ? l10n.officeNeedsYou : l10n.officeToastReady}',
     );
     if (sound) _sound(settings.sound);
   }

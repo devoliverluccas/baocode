@@ -10,6 +10,7 @@ import 'office_characters.dart';
 import 'office_layout.dart';
 import 'office_model.dart';
 import 'office_sprites.dart';
+import 'office_theme.dart';
 
 /// Where each thing of the campus is, in the sprites' pixels (a character
 /// is 16×32): what [CampusPainter] draws, and what a tap or hover is
@@ -471,6 +472,7 @@ class CampusPainter extends CustomPainter {
   void paintBuilding(Canvas canvas, BuildingBox box) {
     final color = colorOf(box.building);
     final ink = inkOn(color);
+    final theme = OfficeTheme.of(box.building.company);
     // The roof juts out a pixel each side, a darker eave under it.
     final roof = Rect.fromLTRB(
       box.sign.left - 1,
@@ -481,7 +483,12 @@ class CampusPainter extends CustomPainter {
     canvas
       ..drawRect(
         box.rect,
-        Paint()..color = Color.lerp(colors.building, color, 0.18)!,
+        Paint()
+          ..color = Color.lerp(
+            colors.building,
+            color,
+            theme == null ? 0.18 : 0.26,
+          )!,
       )
       ..drawRect(box.rect, _stroke(colors.border))
       ..drawRect(roof, Paint()..color = color)
@@ -489,7 +496,9 @@ class CampusPainter extends CustomPainter {
         Rect.fromLTRB(roof.left, roof.bottom - 2, roof.right, roof.bottom),
         Paint()..color = _shade(color, 0.3),
       );
-    final icon = companyIcons[box.building.icon];
+    if (theme != null) _paintRoofTop(canvas, box, theme);
+    final glyph = OfficeTheme.glyphs[box.building.icon];
+    final icon = glyph == null ? companyIcons[box.building.icon] : null;
     // The projects in no company: how many, the way to assign them beside.
     final none = box.building.company == null;
     final count = box.building.rooms.length + box.building.dim.length;
@@ -507,6 +516,16 @@ class CampusPainter extends CustomPainter {
           package: icon.fontPackage,
         );
         left += 19;
+      } else if (glyph != null) {
+        // In pixels of 2, as the icon's 14.
+        OfficeTheme.glyph(
+          canvas,
+          glyph,
+          Offset(left, ((sign.top + sign.bottom - 2) / 2 - 7).roundToDouble()),
+          ink,
+          2,
+        );
+        left += 20;
       }
       _write(
         canvas,
@@ -539,7 +558,13 @@ class CampusPainter extends CustomPainter {
       if (room.card) {
         paintCard(room);
       } else {
-        paintRoom(canvas, room, badge: color);
+        paintRoom(
+          canvas,
+          room,
+          badge: color,
+          theme: theme,
+          company: box.building.name,
+        );
       }
     }
     paintDim(canvas, box);
@@ -597,8 +622,14 @@ class CampusPainter extends CustomPainter {
   /// A room and who is in it, their company's [badge] on them: its scene
   /// (lib/office/office_characters.dart) where there is one, those it has
   /// no desk for (level 3) in rows under it.
-  void paintRoom(Canvas canvas, RoomBox box, {Color? badge}) {
-    _paintLabel(box);
+  void paintRoom(
+    Canvas canvas,
+    RoomBox box, {
+    Color? badge,
+    OfficeTheme? theme,
+    String company = '',
+  }) {
+    _paintLabel(box, theme);
     if ((sprites, scenes?[box.room.project]) case (
       final sprites?,
       final scene?,
@@ -622,7 +653,10 @@ class CampusPainter extends CustomPainter {
         badge: badge,
         tick: scenes!.tick,
         small: !geometry.labeled,
+        theme: theme,
       );
+      // Too small in the mini office, its roof says it.
+      if (theme != null && !iconsOnly) _paintBannerName(box, theme, company);
       // Someone at work in it: its lights on, a wash over the scene.
       if (roomColor(box.room) == colors.lit) {
         canvas.drawRect(
@@ -686,27 +720,130 @@ class CampusPainter extends CustomPainter {
     _paintMore(box);
   }
 
-  /// The room's name on a dark strip over its wall.
-  void _paintLabel(RoomBox box) {
+  /// The room's name on its plate over the wall, in its company's color
+  /// ([theme]'s accent) or dark.
+  void _paintLabel(RoomBox box, OfficeTheme? theme) {
     final rect = _screen(box.rect);
     _over.add((canvas) {
-      final strip = Rect.fromLTWH(rect.left, rect.top, rect.width, labelHeight);
-      canvas.drawRect(strip, Paint()..color = const Color(0xa6000000));
-      _write(
-        canvas,
+      // Left of its "!" (see _paintMore).
+      final room = rect.width - 14 - (box.room.waiting && !box.all ? 46 : 0);
+      final name = _layout(
         box.room.project.name,
-        Rect.fromLTRB(
-          strip.left + 7,
-          strip.top,
-          // Left of its icon and its "!" (CampusSigns).
-          strip.right - 24 - (box.room.waiting && !box.all ? 22 : 0),
-          strip.bottom,
-        ),
-        size: 12.5,
-        color: const Color(0xffffffff),
+        12.5,
+        const Color(0xffffffff),
         bold: geometry.labeled,
+        maxWidth: room - 14,
       );
+      final plate = Rect.fromLTWH(
+        rect.left,
+        rect.top,
+        (name.width + 16).ceilToDouble(),
+        labelHeight,
+      );
+      final fill = switch (theme) {
+        final theme? => OfficeTheme.shade(theme.accent, 0.62),
+        null => const Color(0xd9000000),
+      };
+      canvas
+        ..drawRRect(
+          RRect.fromRectAndCorners(
+            plate,
+            bottomRight: const Radius.circular(4),
+          ),
+          Paint()..color = fill,
+        )
+        ..drawRect(
+          Rect.fromLTWH(plate.left, plate.bottom - 2, plate.width - 2, 2),
+          Paint()..color = theme?.accent ?? const Color(0xff8e8e93),
+        );
+      name
+        ..paint(
+          canvas,
+          Offset(
+            plate.left + 8,
+            (plate.center.dy - 1 - name.height / 2).roundToDouble(),
+          ),
+        )
+        ..dispose();
     });
+  }
+
+  /// The company's name on its banner on the wall ([OfficeTheme.banner]).
+  void _paintBannerName(RoomBox box, OfficeTheme theme, String name) {
+    final banner = OfficeTheme.banner(box.rect.topLeft);
+    final glyph = OfficeTheme.glyphs[theme.icon] != null;
+    final at = _screen(
+      Rect.fromLTRB(
+        banner.left + (glyph ? 12 : 3),
+        banner.top + 1,
+        banner.right - 2,
+        banner.bottom - 1,
+      ),
+    );
+    _over.add(
+      (canvas) => _write(
+        canvas,
+        name,
+        at,
+        size: math.min(13, at.height * 0.78),
+        color: OfficeTheme.inkOn(theme.accent),
+        bold: true,
+      ),
+    );
+  }
+
+  /// Over a themed building's roof, at its left: the night's moon and
+  /// stars, the goals' flag, the launch pad's antenna, its light blinking.
+  void _paintRoofTop(Canvas canvas, BuildingBox box, OfficeTheme theme) {
+    final at = Offset(box.sign.left + 2, box.sign.top - 7);
+    final accent = theme.accent;
+    switch (theme.decor) {
+      case OfficeDecor.night:
+        OfficeTheme.glyph(
+          canvas,
+          OfficeTheme.glyphs['moon']!,
+          at + const Offset(3, 0),
+          const Color(0xfff6e9a8),
+        );
+        OfficeTheme.picture(
+          canvas,
+          const [
+            '.w.......w..',
+            '.....w......',
+            '..........w.',
+            '...w........',
+          ],
+          at + const Offset(12, 1),
+          {'w': const Color(0xffffffff)},
+        );
+      case OfficeDecor.goals:
+        OfficeTheme.picture(
+          canvas,
+          const [
+            '.paaaa',
+            '.paaa.',
+            '.paa..',
+            '.p....',
+            '.p....',
+            'pp....',
+            'pp....',
+          ],
+          at + const Offset(4, 0),
+          {'p': const Color(0xffbbbbbb), 'a': accent},
+        );
+      case OfficeDecor.launch:
+        final on = (scenes?.tick ?? 0) % 8 < 4;
+        OfficeTheme.picture(
+          canvas,
+          const ['..r..', '..p..', '..p..', '.ppp.', '.p.p.', 'pp.pp', 'p...p'],
+          at + const Offset(4, 0),
+          {
+            'r': on ? const Color(0xffff3b30) : const Color(0xff5a1a16),
+            'p': const Color(0xff9a9aa0),
+          },
+        );
+      case OfficeDecor.plain:
+    }
   }
 
   /// [agents] standing where they are: boxes while the sprites load; their
