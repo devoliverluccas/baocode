@@ -161,6 +161,12 @@ class OfficeViewState extends State<OfficeView> {
                   OfficeRoom(project, const []),
               ].where((r) => r.project == _room).firstOrNull;
         _scenes.sync(campus, still: _still);
+        // Nobody in a room: no frames to draw till someone comes.
+        if (_scenes.isEmpty) {
+          _clock.stop();
+        } else {
+          _clock.keepTo(context);
+        }
         final body = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

@@ -1,4 +1,5 @@
 import 'package:baocode/chat/chat_models.dart';
+import 'package:baocode/office/office_characters.dart';
 import 'package:baocode/office/office_model.dart';
 import 'package:baocode/office/office_painter.dart';
 import 'package:baocode/workspace/companies.dart';
@@ -170,5 +171,20 @@ void main() {
       pixelRatio: 1.25,
     ).paint(Canvas(recorder), geometry.size * 2 / 1.25);
     recorder.endRecording().dispose();
+  });
+
+  test('level 3: who the scene has no desk for, in rows under it', () {
+    final office = campus([for (var i = 0; i < 6; i++) thread(site, 'r$i')]);
+    final building = office.buildings.firstWhere((b) => b.name == 'PROMOV');
+    final room = building.rooms.single;
+    final geometry = CampusGeometry.room(building, room);
+    final box = geometry.buildings.single.rooms.single;
+    expect(box.agents, hasLength(6));
+    expect(box.beyond.map((a) => a.$1.title), ['r4', 'r5']);
+    final under = box.beyond.first.$2;
+    expect(under.top, greaterThan(box.rect.top + CampusGeometry.roomHeight));
+    expect(box.rect.contains(under.center), isTrue);
+    final scenes = OfficeScenes()..sync(office, still: true);
+    expect(scenes.find(geometry, under.center)?.$1.title, 'r4');
   });
 }

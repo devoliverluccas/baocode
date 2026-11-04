@@ -482,6 +482,9 @@ class OfficeScenes {
 
   bool get moving => _rooms.values.any((scene) => scene.moving);
 
+  /// No room has anyone in it: nothing to play.
+  bool get isEmpty => _rooms.isEmpty;
+
   double _seconds = 0;
 
   /// Steps of 0.15 s gone: the PCs' and the server's frames.
