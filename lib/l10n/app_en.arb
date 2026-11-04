@@ -8718,8 +8718,8 @@
   "officeNextRoom": "Next room",
   "officePrevFloor": "Previous floor",
   "officeNextFloor": "Next floor",
-  "officeDoneOpen": "✅ done — open",
-  "officeNeedsYou": "! needs you",
+  "officeDoneOpen": "done — open",
+  "officeNeedsYou": "needs you",
   "officeThinking": "thinking…",
   "officeUsing": "using {name}",
   "@officeUsing": {

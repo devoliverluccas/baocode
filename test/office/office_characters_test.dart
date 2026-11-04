@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/office/office_characters.dart';
 import 'package:baocode/office/office_layout.dart';
@@ -101,8 +103,8 @@ void main() {
     expect(scene.characters, isEmpty);
   });
 
-  test('a team at the desks nearest its lead, then the table, then +N; '
-      'out when done', () {
+  test('a team sat at the desks nearest its lead, then +N; a ✓ a while '
+      'when done, then out', () {
     TeamMember member(String id) => TeamMember(id: id, label: id);
     final scene = RoomScene();
     final team = [for (final id in 'pqrs'.split('')) member(id)];
@@ -115,18 +117,24 @@ void main() {
     expect(members.map((c) => c.member!.id), ['p', 'q', 'r']);
     expect(members.map((c) => c.isMember), everyElement(isTrue));
     expect(lead.teamOverflow, 1);
-    // Two desks free of four: sat at them, the third round the table.
+    // Two desks free in the front row: sat at them, the third behind.
     final tiles = {for (final c in scene.characters) c.tile};
     expect(tiles, hasLength(5));
-    expect(members.where((c) => c.sitting), hasLength(2));
-    expect(layout.table.map((s) => s.tile), contains(members.last.tile));
+    expect(members.map((c) => c.sitting), everyElement(isTrue));
+    expect(layout.teamDesks.map((s) => s.tile), contains(members.last.tile));
 
     scene.sync([
       agent('a', tool: ToolKind.agent, team: [team[1]]),
       agent('b'),
     ]);
+    // Done: sat on, its ✓ over it, then up and out.
+    expect(members[0].done, greaterThan(0));
+    expect(members[0].leaving, isFalse);
+    run(scene, 1);
+    expect(members[0].sitting, isTrue);
+    run(scene, 1);
     expect(members[0].leaving, isTrue);
-    expect(members[1].leaving, isFalse);
+    expect(members[1].done, 0);
     run(scene);
     expect(scene.characters.where((c) => c.isMember).single, members[1]);
     expect(lead.teamOverflow, 0);
@@ -134,6 +142,47 @@ void main() {
     scene.sync([agent('b')]);
     run(scene);
     expect(scene.characters.map((c) => c.agent.title), ['b']);
+  });
+
+  test('comes in, and goes, by the matrix effect at the door', () {
+    final scene = RoomScene();
+    scene.sync([agent('a')]);
+    final character = scene.characters.single;
+    run(scene, 0.2);
+    expect(character.appear, inExclusiveRange(0, 1));
+    expect(character.tile, layout.door);
+    run(scene);
+    expect(character.appear, 1);
+    expect(character.sitting, isTrue);
+
+    scene.sync([]);
+    for (var i = 0; i < 300 && character.vanish == 0; i++) {
+      scene.update(1 / 30);
+    }
+    expect(character.tile, layout.door);
+    expect(character.vanish, inExclusiveRange(0, 1));
+    expect(scene.characters, contains(character));
+    run(scene);
+    expect(scene.characters, isEmpty);
+  });
+
+  test("a kernel's shirt: the chest turned, the skin kept", () {
+    expect(OfficeKernel.of('claude-code'), OfficeKernel.claude);
+    expect(OfficeKernel.of('codex'), OfficeKernel.codex);
+    expect(OfficeKernel.of(null), OfficeKernel.other);
+    const width = 112;
+    final rgba = Uint8List(width * 96 * 4);
+    void put(int x, int y, List<int> color) =>
+        rgba.setAll((y * width + x) * 4, [...color, 255]);
+    const skin = [0xe9, 0xa3, 0x84], blue = [0x11, 0x49, 0x78];
+    put(16 + 5, 15, skin);
+    put(16 + 5, 20, blue);
+    put(16 + 6, 20, skin);
+    OfficeSprites.shirt(rgba, width, OfficeKernel.claude);
+    List<int> at(int x, int y) =>
+        rgba.sublist((y * width + x) * 4, (y * width + x) * 4 + 3);
+    expect(at(21, 20)[0], greaterThan(at(21, 20)[2]));
+    expect(at(22, 20), skin);
   });
 
   test('each to its own desk; motion turned down, there at once', () {

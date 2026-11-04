@@ -22368,13 +22368,13 @@ abstract class AppLocalizations {
   /// No description provided for @officeDoneOpen.
   ///
   /// In en, this message translates to:
-  /// **'✅ done — open'**
+  /// **'done — open'**
   String get officeDoneOpen;
 
   /// No description provided for @officeNeedsYou.
   ///
   /// In en, this message translates to:
-  /// **'! needs you'**
+  /// **'needs you'**
   String get officeNeedsYou;
 
   /// No description provided for @officeThinking.

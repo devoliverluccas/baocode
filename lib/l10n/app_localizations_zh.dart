@@ -12987,10 +12987,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get officeNextFloor => '下一层';
 
   @override
-  String get officeDoneOpen => '✅ 完成 — 打开';
+  String get officeDoneOpen => '完成 — 打开';
 
   @override
-  String get officeNeedsYou => '! 需要你';
+  String get officeNeedsYou => '需要你';
 
   @override
   String get officeThinking => '思考中…';

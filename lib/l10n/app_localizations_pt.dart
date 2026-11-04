@@ -13833,10 +13833,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get officeNextFloor => 'Próximo andar';
 
   @override
-  String get officeDoneOpen => '✅ pronto — abrir';
+  String get officeDoneOpen => 'pronto — abrir';
 
   @override
-  String get officeNeedsYou => '! precisa de você';
+  String get officeNeedsYou => 'precisa de você';
 
   @override
   String get officeThinking => 'pensando…';

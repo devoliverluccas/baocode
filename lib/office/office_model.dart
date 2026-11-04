@@ -108,7 +108,11 @@ class OfficeThread {
     this.current,
     this.team = const [],
     this.thread,
+    this.kernel,
   });
+
+  /// Its kernel's id ([KernelDescriptor.id]): 'claude-code', 'codex'.
+  final String? kernel;
 
   final Project project;
   final String title;
@@ -140,6 +144,9 @@ class OfficeAgent {
   final OfficeThread source;
   final OfficeActivity activity;
 
+  /// Who runs it, by its kernel: its shirt and its badge.
+  OfficeKernel get kernel => OfficeKernel.of(source.kernel);
+
   /// Its conversation's, from run to run: what it looks like, its desk.
   final int hash;
 
@@ -160,6 +167,20 @@ class OfficeAgent {
   // Not String.hashCode: the same from run to run.
   static int hashOf(String key) =>
       key.codeUnits.fold(0, (sum, unit) => (sum * 31 + unit) & 0xfffffff);
+}
+
+/// Who runs a conversation: Claude Code (an orange shirt and spark),
+/// Codex (dark, a hexagon), or another (grey, a "?").
+enum OfficeKernel {
+  claude,
+  codex,
+  other;
+
+  static OfficeKernel of(String? id) => switch (id) {
+    'claude-code' => claude,
+    'codex' => codex,
+    _ => other,
+  };
 }
 
 /// A subagent at work for a conversation: in its room beside it while it
@@ -371,6 +392,7 @@ OfficeCampus campusOf(
           current: runningItem(thread),
           team: teamOf(thread),
           thread: thread,
+          kernel: thread.kernel.id,
         ),
     ],
   );

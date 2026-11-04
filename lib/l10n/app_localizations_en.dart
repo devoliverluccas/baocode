@@ -13737,10 +13737,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get officeNextFloor => 'Next floor';
 
   @override
-  String get officeDoneOpen => '✅ done — open';
+  String get officeDoneOpen => 'done — open';
 
   @override
-  String get officeNeedsYou => '! needs you';
+  String get officeNeedsYou => 'needs you';
 
   @override
   String get officeThinking => 'thinking…';

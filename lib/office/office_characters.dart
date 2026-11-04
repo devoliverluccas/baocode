@@ -66,6 +66,20 @@ class OfficeCharacter {
   /// On its way out, by the door.
   bool leaving = false;
 
+  /// Of its coming in at the door (Pixel Agents' matrix effect), 0 to 1;
+  /// it walks once in.
+  double appear = 0;
+
+  /// Of its going at the door, once there, 0 to 1: out at 1.
+  double vanish = 0;
+
+  /// A team member done: the seconds it sits on with its ✓ before it gets
+  /// up to leave.
+  double done = 0;
+
+  /// The matrix effect's, and how long one done sits on.
+  static const effectTime = 0.5, doneTime = 1.5;
+
   int _frame = 0;
   double _frameTime = 0;
 
@@ -125,6 +139,7 @@ class OfficeCharacter {
   }
 
   void _snap() {
+    appear = 1;
     if (_goal case final goal?) tile = goal.tile;
     path = const [];
     _progress = 0;
@@ -139,6 +154,11 @@ class OfficeCharacter {
     if (_frameTime >= frameTime) {
       _frameTime %= frameTime;
       _frame++;
+    }
+    if (appear < 1) {
+      // At the door till it is all there.
+      appear = math.min(1, appear + seconds / effectTime);
+      return;
     }
     if (!walking) return;
     final next = path.first;
@@ -236,7 +256,11 @@ class RoomScene {
       for (final c in characters)
         if (c.desk case final desk?) desk.tile,
     };
-    final taken = <Tile>{};
+    // Who is done keeps its seat while it sits on.
+    final taken = <Tile>{
+      for (final c in _leavingMembers)
+        if (c.done > 0 && c._goal != null) c._goal!.tile,
+    };
     for (final character in characters) {
       if (character.leaving) {
         _leave(character);
@@ -265,6 +289,11 @@ class RoomScene {
       if (!character.leaving) _keepTeam(character, taken);
     }
     if (still) {
+      for (final character in _leavingMembers) {
+        character
+          ..done = 0
+          ..leaving = true;
+      }
       for (final character in this.characters) {
         character._snap();
       }
@@ -273,7 +302,9 @@ class RoomScene {
   }
 
   void _leave(OfficeCharacter character) {
-    character.leaving = true;
+    character
+      ..leaving = true
+      ..done = 0;
     character._goTo(layout, Seat(layout.door, OfficeFacing.up), _Pose.stand);
     for (final member in character._team.values) {
       _leavingMembers.add(member);
@@ -310,25 +341,26 @@ class RoomScene {
       }
       taken.add(seat.tile);
       placed++;
-      character._goTo(
-        layout,
-        seat,
-        layout.desks.any((d) => d.tile == seat.tile) ? _Pose.sit : _Pose.stand,
-      );
+      character._goTo(layout, seat, seat.pc ? _Pose.sit : _Pose.stand);
     }
     lead.teamOverflow = team.length - placed;
   }
 
+  /// [lead]'s member [id] done: sat on a while, its ✓ over it, if sat;
+  /// then out.
   void _leaveTeam(OfficeCharacter lead, String id) {
     final member = lead._team.remove(id)!;
     _leavingMembers.add(member);
-    _leave(member);
+    if (member.sitting) {
+      member.done = OfficeCharacter.doneTime;
+    } else {
+      _leave(member);
+    }
   }
 
-  /// Takes out who has left: at the door ([all]: wherever they are).
+  /// Takes out who has left: gone at the door ([all]: wherever they are).
   void _sweep({bool all = false}) {
-    bool out(OfficeCharacter c) =>
-        c.leaving && (all || (!c.walking && c.tile == layout.door));
+    bool out(OfficeCharacter c) => c.leaving && (all || c.vanish >= 1);
     _byKey.removeWhere((_, c) => out(c));
     _leavingMembers.removeWhere(out);
   }
@@ -347,7 +379,18 @@ class RoomScene {
       if (character.isMember && !character.leaving) {
         character.agent = character.lead!.agent;
       }
+      if (character.done > 0 && (character.done -= seconds) <= 0) {
+        _leave(character);
+      }
       character._update(seconds);
+      if (character.leaving &&
+          !character.walking &&
+          character.tile == layout.door) {
+        character.vanish = math.min(
+          1,
+          character.vanish + seconds / OfficeCharacter.effectTime,
+        );
+      }
     }
     _sweep();
   }
@@ -381,6 +424,7 @@ class RoomScene {
     Color wallTint = const Color(0xffe6dccb),
     Color? badge,
     int tick = 0,
+    bool small = false,
   }) {
     final o = origin(topLeft);
     const t = OfficeLayout.tile;
@@ -427,7 +471,7 @@ class RoomScene {
       for (final character in characters)
         (
           character.position.dy,
-          () => _paintCharacter(canvas, character, o, sprites, badge),
+          () => _paintCharacter(canvas, character, o, sprites, badge, small),
         ),
     ]..sort((a, b) => a.$1.compareTo(b.$1));
     for (final (_, paint) in drawables) {
@@ -483,8 +527,10 @@ class RoomScene {
     Offset origin,
     OfficeSprites sprites,
     Color? badge,
+    bool small,
   ) {
     final rect = character.rect.shift(origin);
+    final kernel = character.agent.kernel;
     sprites.drawCharacter(
       canvas,
       character.member?.sprite ?? character.agent.sprite,
@@ -493,6 +539,18 @@ class RoomScene {
       facing: character.facing,
       hue: character.member?.hue ?? character.agent.hue,
       badge: character.isMember ? null : badge,
+      kernel: kernel,
+      appear: character.appear,
+      vanish: character.vanish,
+    );
+    if (character.appear < 1 || character.vanish > 0) return;
+    // Who runs it, by its head; a team member's, its lead's, smaller.
+    final member = small || character.isMember;
+    OfficeSprites.drawKernel(
+      canvas,
+      kernel,
+      rect.topLeft + (member ? const Offset(12, 4) : const Offset(11, 3)),
+      small: member,
     );
   }
 }

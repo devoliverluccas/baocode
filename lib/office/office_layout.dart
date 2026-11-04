@@ -39,7 +39,8 @@ class Seat {
 }
 
 /// A room's grid and furniture, as Pixel Agents' OfficeLayout: the same
-/// for every room, 4 desks for [OfficeRoom.maxVisible] characters.
+/// for every room, 4 desks for [OfficeRoom.maxVisible] characters and 4
+/// more behind for their teams.
 ///
 ///     col  0 1 2 3 4 5 6 7 8
 ///     r0   B B W N H H C D W   wall: bookshelf, window, whiteboard, clock, door
@@ -47,15 +48,17 @@ class Seat {
 ///     r2   K K K . K K K . S   desks with 2 PCs each; S the server
 ///     r3   K K K . K K K . S
 ///     r4   h . h . h . h . .   chairs
-///     r5   . T T . . F F c P   meeting table, sofa, coffee, plant
-///     r6   . T T . . . . . .
+///     r5   . . . . . . . . c   coffee
+///     r6   K K K . K K K . .   the teams' desks
+///     r7   K K K . K K K . P   plant
+///     r8   h . h . h . h . .
 class OfficeLayout {
   OfficeLayout._();
 
   static final room = OfficeLayout._();
 
   static const tile = 16.0;
-  static const cols = 9, rows = 7;
+  static const cols = 9, rows = 9;
 
   /// In the sprites' pixels: the wall's pieces stand a tile above row 0.
   static const width = cols * tile, height = (rows + 1) * tile;
@@ -67,61 +70,49 @@ class OfficeLayout {
 
   /// The tiles furniture stands on.
   final Set<Tile> blocked = {
-    for (var col = 0; col < 7; col++)
-      if (col != 3) ...[(col: col, row: 2), (col: col, row: 3)],
+    for (final row in [2, 3, 6, 7])
+      for (var col = 0; col < 7; col++)
+        if (col != 3) (col: col, row: row),
     (col: 8, row: 2),
     (col: 8, row: 3),
-    (col: 7, row: 5),
     (col: 8, row: 5),
-    for (final col in [1, 2]) ...[(col: col, row: 5), (col: col, row: 6)],
+    (col: 8, row: 7),
   };
 
   /// In drawing order, back to front.
-  final List<OfficePiece> pieces = const [
-    OfficePiece(
+  final List<OfficePiece> pieces = [
+    const OfficePiece(
       (col: 0, row: 0),
       asset: 'DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF',
       onWall: true,
     ),
-    OfficePiece(
+    const OfficePiece(
       (col: 3, row: 0),
       asset: 'SMALL_PAINTING/SMALL_PAINTING',
       onWall: true,
     ),
-    OfficePiece((col: 4, row: 0), asset: 'WHITEBOARD/WHITEBOARD', onWall: true),
-    OfficePiece((col: 6, row: 0), asset: 'CLOCK/CLOCK', onWall: true),
-    OfficePiece((col: 0, row: 3), asset: 'DESK/DESK_FRONT'),
-    OfficePiece((col: 4, row: 3), asset: 'DESK/DESK_FRONT'),
-    // On the desks, after them.
-    OfficePiece((col: 0, row: 3), asset: 'PC/PC_FRONT_OFF'),
-    OfficePiece((col: 2, row: 3), asset: 'PC/PC_FRONT_OFF'),
-    OfficePiece((col: 4, row: 3), asset: 'PC/PC_FRONT_OFF'),
-    OfficePiece((col: 6, row: 3), asset: 'PC/PC_FRONT_OFF'),
-    OfficePiece((col: 8, row: 3)),
-    OfficePiece(
-      (col: 0, row: 4),
-      asset: 'WOODEN_CHAIR/WOODEN_CHAIR_BACK',
-      seat: true,
+    const OfficePiece(
+      (col: 4, row: 0),
+      asset: 'WHITEBOARD/WHITEBOARD',
+      onWall: true,
     ),
-    OfficePiece(
-      (col: 2, row: 4),
-      asset: 'WOODEN_CHAIR/WOODEN_CHAIR_BACK',
-      seat: true,
-    ),
-    OfficePiece(
-      (col: 4, row: 4),
-      asset: 'WOODEN_CHAIR/WOODEN_CHAIR_BACK',
-      seat: true,
-    ),
-    OfficePiece(
-      (col: 6, row: 4),
-      asset: 'WOODEN_CHAIR/WOODEN_CHAIR_BACK',
-      seat: true,
-    ),
-    OfficePiece((col: 8, row: 5), asset: 'PLANT/PLANT'),
-    OfficePiece((col: 5, row: 5), asset: 'SOFA/SOFA_FRONT', seat: true),
-    OfficePiece((col: 7, row: 5), asset: 'COFFEE/COFFEE'),
-    OfficePiece((col: 1, row: 6), asset: 'COFFEE_TABLE/COFFEE_TABLE'),
+    const OfficePiece((col: 6, row: 0), asset: 'CLOCK/CLOCK', onWall: true),
+    for (final row in [3, 7]) ...[
+      for (final col in [0, 4])
+        OfficePiece((col: col, row: row), asset: 'DESK/DESK_FRONT'),
+      // On the desks, after them.
+      for (final col in [0, 2, 4, 6])
+        OfficePiece((col: col, row: row), asset: 'PC/PC_FRONT_OFF'),
+      for (final col in [0, 2, 4, 6])
+        OfficePiece(
+          (col: col, row: row + 1),
+          asset: 'WOODEN_CHAIR/WOODEN_CHAIR_BACK',
+          seat: true,
+        ),
+    ],
+    const OfficePiece((col: 8, row: 3)),
+    const OfficePiece((col: 8, row: 7), asset: 'PLANT/PLANT'),
+    const OfficePiece((col: 8, row: 5), asset: 'COFFEE/COFFEE'),
   ];
 
   /// The desks' chairs, facing their PCs.
@@ -130,9 +121,10 @@ class OfficeLayout {
       Seat((col: col, row: 4), OfficeFacing.up, pc: true),
   ];
 
-  final List<Seat> sofa = const [
-    Seat((col: 5, row: 5), OfficeFacing.down),
-    Seat((col: 6, row: 5), OfficeFacing.down),
+  /// The teams' desks, behind: for team members only.
+  final List<Seat> teamDesks = [
+    for (final col in [0, 2, 4, 6])
+      Seat((col: col, row: 8), OfficeFacing.up, pc: true),
   ];
 
   bool isWalkable(Tile at) =>
@@ -176,24 +168,17 @@ class OfficeLayout {
           .where((seat) => !taken.contains(seat.tile))
           .firstOrNull;
 
-  /// Round the meeting table: where a team stands when no desk is free.
-  final List<Seat> table = const [
-    Seat((col: 0, row: 5), OfficeFacing.right),
-    Seat((col: 3, row: 5), OfficeFacing.left),
-    Seat((col: 0, row: 6), OfficeFacing.right),
-    Seat((col: 3, row: 6), OfficeFacing.left),
-  ];
-
-  /// Where a team member of the one at [lead] goes, none of [taken]: the
-  /// free desk nearest it, else round the [table]; null when all are.
+  /// Where a team member of the one at [lead] sits, none of [taken]: the
+  /// free desk nearest it; null when all are.
   Seat? teamSeat(Seat lead, Set<Tile> taken) {
     int far(Seat seat) =>
         (seat.tile.col - lead.tile.col).abs() +
         (seat.tile.row - lead.tile.row).abs();
-    final desks =
-        this.desks.where((seat) => !taken.contains(seat.tile)).toList()
-          ..sort((a, b) => far(a).compareTo(far(b)));
-    return desks.firstOrNull ??
-        table.where((seat) => !taken.contains(seat.tile)).firstOrNull;
+    return ([
+            ...desks,
+            ...teamDesks,
+          ].where((seat) => !taken.contains(seat.tile)).toList()
+          ..sort((a, b) => far(a).compareTo(far(b))))
+        .firstOrNull;
   }
 }

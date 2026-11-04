@@ -432,6 +432,7 @@ class CampusPainter extends CustomPainter {
         floor: box.room.project.name.length,
         badge: badge,
         tick: scenes!.tick,
+        small: !geometry.labeled,
       );
       // Someone at work in it: its lights on, a wash over the scene.
       if (roomColor(box.room) == colors.lit) {
@@ -455,44 +456,42 @@ class CampusPainter extends CustomPainter {
         color: const Color(0xffffffff),
       );
       final origin = RoomScene.origin(box.rect.topLeft);
-      // The bubbles drawn so far: each next one goes up clear of them.
-      final placed = <Rect>[];
-      // Who leads first: the teams' bubbles go round theirs.
-      final characters = scene.characters
-        ..sort((a, b) => (a.isMember ? 1 : 0) - (b.isMember ? 1 : 0));
-      for (final character in characters) {
+      final says = <_Say>[];
+      for (final character in scene.characters) {
         character.bubble = null;
-        if (character.leaving) continue;
+        if (character.leaving || character.walking) continue;
         final rect = character.rect.shift(origin);
         if (character.member case final member?) {
-          if (geometry.labeled && !character.walking) {
-            _say(canvas, _memberLine(member), rect, box.rect, placed);
+          if (character.done > 0) {
+            says.add(_Say(rect, _Mark.done, character: character));
+          } else if (geometry.labeled) {
+            says.add(
+              _Say(rect, _Mark.work, line: _memberLine(member), member: true),
+            );
           }
           continue;
         }
-        if (geometry.labeled) {
-          placed.add(_title(canvas, character.agent, rect));
-          if (character.teamOverflow > 0) {
-            _say(
-              canvas,
-              '+${character.teamOverflow}',
-              rect.shift(const Offset(9, 6)),
-              box.rect,
-              placed,
-            );
-          }
+        says.add(
+          _sayOf(
+            character.agent,
+            character.status,
+            character.current,
+            rect,
+            character: character,
+          ),
+        );
+        if (character.teamOverflow > 0) {
+          _text(
+            canvas,
+            '+${character.teamOverflow}',
+            Rect.fromLTWH(rect.right - 3, rect.top + 11, 10, 5),
+            size: 4,
+            color: const Color(0xffffffff),
+          );
         }
-        if (character.walking) continue;
-        character.bubble = _bubble(
-          canvas,
-          rect,
-          box.rect,
-          character.status,
-          character.current,
-          placed,
-        )?.shift(-origin);
       }
-      _paintStill(canvas, box.beyond, box.rect, sprites);
+      _paintStill(canvas, box.beyond, sprites, says);
+      _paintSays(canvas, says, box.rect, origin);
       _paintMore(canvas, box);
       return;
     }
@@ -500,133 +499,245 @@ class CampusPainter extends CustomPainter {
       ..drawRect(box.rect, Paint()..color = roomColor(box.room))
       ..drawRect(box.rect, _stroke(colors.border));
     _text(canvas, box.room.project.name, label, size: 6, color: colors.text);
-    _paintStill(canvas, box.agents, box.rect, sprites);
+    final says = <_Say>[];
+    _paintStill(canvas, box.agents, sprites, says);
+    _paintSays(canvas, says, box.rect, Offset.zero);
     _paintMore(canvas, box);
   }
 
-  /// [agents] standing where they are in [room]: boxes while the sprites
-  /// load.
+  /// [agents] standing where they are: boxes while the sprites load; their
+  /// bubbles to [says].
   void _paintStill(
     Canvas canvas,
     Iterable<(OfficeAgent, Rect)> agents,
-    Rect room,
     OfficeSprites? sprites,
+    List<_Say> says,
   ) {
-    final placed = <Rect>[];
     for (final (agent, rect) in agents) {
       switch (sprites) {
         case final sprites?:
-          sprites.drawCharacter(canvas, agent.sprite, rect, hue: agent.hue);
+          sprites.drawCharacter(
+            canvas,
+            agent.sprite,
+            rect,
+            hue: agent.hue,
+            kernel: agent.kernel,
+          );
+          OfficeSprites.drawKernel(
+            canvas,
+            agent.kernel,
+            rect.topLeft + const Offset(11, 3),
+            small: !geometry.labeled,
+          );
         case null:
           canvas.drawRect(rect.deflate(3), Paint()..color = colors.muted);
       }
-      if (geometry.labeled) placed.add(_title(canvas, agent, rect));
-      _bubble(canvas, rect, room, agent.status, agent.source.current, placed);
+      says.add(_sayOf(agent, agent.status, agent.source.current, rect));
     }
   }
 
-  /// The bubble over the head of one at [rect], kept in [room], for its
-  /// [status] and what its turn runs ([current]): on the campus a pixel
-  /// icon (the "!" of one waiting, the ✅ of one done, dots at work), closer
-  /// in a line saying it ([activityText]), clear of those [placed] before
-  /// (it joins them). Where it is drawn; null, none (one idle).
-  Rect? _bubble(
-    Canvas canvas,
-    Rect rect,
-    Rect room,
+  /// The bubble of a conversation's character at [rect], for its [status]
+  /// and what its turn runs ([current]): its title on top, then what it
+  /// does ([activityText]); on the campus, its icon alone.
+  _Say _sayOf(
+    OfficeAgent agent,
     ThreadStatus status,
     ChatItem? current,
-    List<Rect> placed,
-  ) {
-    if (status == ThreadStatus.idle) return null;
-    const dark = Color(0xff1c1c1e);
-    final (fill, ink) = switch (status) {
-      ThreadStatus.needsInput => (const Color(0xffffcc00), dark),
-      ThreadStatus.unread => (const Color(0xff34c759), const Color(0xffffffff)),
-      _ => (const Color(0xfff5f5f5), dark),
-    };
-    if (!geometry.labeled) {
-      final box = Rect.fromLTWH(rect.left + 5, rect.top - 6, 7, 8);
-      final marks = switch (status) {
-        ThreadStatus.needsInput => const [(3, 1, 1, 4), (3, 6, 1, 1)],
-        ThreadStatus.unread => const [
-          (1, 4, 1, 1),
-          (2, 5, 1, 1),
-          (3, 4, 1, 1),
-          (4, 3, 1, 1),
-          (5, 2, 1, 1),
-        ],
-        // At work: dots, one more each step.
-        _ => [
-          for (var i = 0; i <= (scenes?.tick ?? 2) % 3; i++)
-            (1 + i * 2, 5, 1, 1),
-        ],
-      };
-      canvas
-        ..drawRect(box.inflate(1), Paint()..color = dark)
-        ..drawRect(box, Paint()..color = fill);
-      for (final (x, y, w, h) in marks) {
-        canvas.drawRect(
-          Rect.fromLTWH(box.left + x, box.top + y, w.toDouble(), h.toDouble()),
-          Paint()..color = ink,
-        );
+    Rect rect, {
+    OfficeCharacter? character,
+  }) => _Say(
+    rect,
+    switch (status) {
+      ThreadStatus.needsInput => _Mark.wait,
+      ThreadStatus.unread => _Mark.done,
+      ThreadStatus.running => _Mark.work,
+      ThreadStatus.idle => null,
+    },
+    title: agent.title,
+    line: activityText(status, current, l10n ?? englishLocalizations),
+    character: character,
+  );
+
+  /// [says] drawn, kept in [room]: each over its own head, a tail down to
+  /// it, the most urgent first; one that would cover another put a line
+  /// up, else down to its icon; who has neither (one idle) left out, its
+  /// title in its hover. [origin]: the scene's, for [OfficeCharacter.bubble].
+  void _paintSays(Canvas canvas, List<_Say> says, Rect room, Offset origin) {
+    says.sort((a, b) => b.priority.compareTo(a.priority));
+    final placed = <(Rect, _Say, TextPainter?, TextPainter?)>[];
+    bool clear(Rect box) =>
+        !placed.any((p) => p.$1.inflate(1).overlaps(box)) &&
+        box.top >= room.top + 10;
+    for (final say in says) {
+      final head = say.head;
+      Rect over(Size size, double up) => Rect.fromLTWH(
+        (head.dx - size.width / 2)
+            .clamp(room.left + 1, room.right - size.width - 1)
+            .roundToDouble(),
+        head.dy - 3 - size.height - up,
+        size.width,
+        size.height,
+      );
+      TextPainter? title, line;
+      if (geometry.labeled) {
+        final ink = say.colors.$2;
+        if (!say.member && say.title != null) {
+          title = _painter(say.title!, ink.withValues(alpha: 0.65), 3.5);
+        }
+        if (say.line != null) {
+          line = _painter(
+            say.line!,
+            ink,
+            4,
+            indent: say.mark == _Mark.work || say.mark == null ? 0 : 6,
+          );
+        }
       }
-      return box;
+      Rect? box;
+      if (title != null || line != null) {
+        final indent = say.mark == _Mark.work || say.mark == null ? 0 : 6;
+        final size = Size(
+          (math.max(title?.width ?? 0, (line?.width ?? 0) + indent) + 4)
+              .ceilToDouble(),
+          2 + (title == null ? 0 : 4.5) + (line == null ? 0 : 4) + 1.5,
+        );
+        for (final up in [0.0, size.height + 2, size.height * 2 + 4]) {
+          if (clear(over(size, up))) {
+            box = over(size, up);
+            break;
+          }
+        }
+      }
+      if (box == null) {
+        title?.dispose();
+        line?.dispose();
+        (title, line) = (null, null);
+        if (say.mark == null) continue;
+        const icon = Size(10, 7);
+        box = [
+          for (final up in [0.0, 9.0, 18.0]) over(icon, up),
+        ].firstWhere(clear, orElse: () => over(icon, 0));
+      }
+      placed.add((box, say, title, line));
+      say.character?.bubble = box.shift(-origin);
     }
-    final text = activityText(status, current, l10n ?? englishLocalizations);
-    if (text == null) return null;
-    final painter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(color: ink, fontSize: 4, height: 1),
-      ),
-      maxLines: 1,
-      ellipsis: '…',
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: 44);
-    const height = 6.0;
-    final width = (painter.width + 4).ceilToDouble();
-    // Over the title, a pixel's tail down to it.
-    final box = _free(
-      Rect.fromLTWH(
-        rect.center.dx - width / 2,
-        rect.top - 7 - height,
-        width,
-        height,
-      ),
-      room,
-      placed,
-    );
-    final tail = rect.center.dx.floorToDouble();
+    // The least urgent first: the most on top.
+    for (final (box, say, title, line) in placed.reversed) {
+      _paintBubble(canvas, box, say, title, line);
+    }
+  }
+
+  void _paintBubble(
+    Canvas canvas,
+    Rect box,
+    _Say say,
+    TextPainter? title,
+    TextPainter? line,
+  ) {
+    const dark = Color(0xff1c1c1e);
+    final (fill, ink) = say.colors;
+    final head = say.head;
+    final tail = head.dx.floorToDouble();
     canvas
       ..drawRect(box.inflate(1), Paint()..color = dark)
       ..drawRect(box, Paint()..color = fill)
+      // A tail down to its head: a notch, then a line.
       ..drawRect(
-        Rect.fromLTRB(tail, box.bottom + 1, tail + 1, rect.top - 6),
+        Rect.fromLTWH(tail - 1, box.bottom + 1, 3, 1),
+        Paint()..color = dark,
+      )
+      ..drawRect(Rect.fromLTWH(tail, box.bottom, 1, 1), Paint()..color = fill)
+      ..drawRect(
+        Rect.fromLTRB(tail, box.bottom + 2, tail + 1, head.dy - 1),
         Paint()..color = dark,
       );
-    painter
-      ..paint(
-        canvas,
-        Offset(box.left + 2, box.top + (height - painter.height) / 2),
-      )
-      ..dispose();
-    return box;
+    if (title == null && line == null) {
+      _mark(canvas, say.mark!, box, ink);
+      return;
+    }
+    var y = box.top + 1.5;
+    if (title != null) {
+      title
+        ..paint(canvas, Offset(box.left + 2, y))
+        ..dispose();
+      y += 4.5;
+    }
+    if (line != null) {
+      if (say.mark case final mark? when mark != _Mark.work) {
+        _glyph(canvas, mark, Offset(box.left + 2, y), ink);
+        line.paint(canvas, Offset(box.left + 8, y));
+      } else {
+        line.paint(canvas, Offset(box.left + 2, y));
+      }
+      line.dispose();
+    }
   }
 
-  /// [agent]'s title over its character at [rect] (levels 2 and 3); where.
-  Rect _title(Canvas canvas, OfficeAgent agent, Rect rect) {
-    final at = Rect.fromLTWH(
-      rect.center.dx - CampusGeometry.slot / 2 + 1,
-      rect.top - 5,
-      CampusGeometry.slot - 2,
-      5,
-    );
-    // On a dark strip: readable over the wall and the desks.
-    canvas.drawRect(at.inflate(0.5), Paint()..color = const Color(0x99000000));
-    _text(canvas, agent.title, at, size: 4, color: const Color(0xffffffff));
-    return at;
+  /// A bubble's icon in [box] (10×7): the "!" of one waiting, the ✓ of one
+  /// done, three dots at work, one up and down in turn.
+  void _mark(Canvas canvas, _Mark mark, Rect box, Color ink) {
+    final paint = Paint()..color = ink;
+    void dot(double x, double y, [double w = 2, double h = 2]) =>
+        canvas.drawRect(Rect.fromLTWH(box.left + x, box.top + y, w, h), paint);
+    switch (mark) {
+      case _Mark.wait:
+        dot(4, 1, 2, 3);
+        dot(4, 5, 2, 1);
+      case _Mark.done:
+        for (final (x, y) in const [(2, 3), (3, 4), (4, 3), (5, 2), (6, 1)]) {
+          dot(x.toDouble(), y.toDouble(), 2, 2);
+        }
+      case _Mark.work:
+        final up = (scenes?.tick ?? 0) ~/ 2 % 3;
+        for (var i = 0; i < 3; i++) {
+          dot(1 + i * 3.0, i == up ? 2 : 3);
+        }
+    }
   }
+
+  /// [mark]'s glyph before a bubble's line, 5 wide at [at].
+  static void _glyph(Canvas canvas, _Mark mark, Offset at, Color ink) {
+    final rows = switch (mark) {
+      _Mark.done => const ['....x', '...x.', 'x.x..', '.x...'],
+      _ => const ['.xx..', '.xx..', '.xx..', '.....', '.xx..'],
+    };
+    for (final (y, row) in rows.indexed) {
+      for (var x = 0; x < row.length; x++) {
+        if (row[x] == 'x') {
+          canvas.drawRect(
+            Rect.fromLTWH(at.dx + x, at.dy + y, 1, 1),
+            Paint()..color = ink,
+          );
+        }
+      }
+    }
+  }
+
+  static TextPainter _painter(
+    String text,
+    Color color,
+    double size, {
+    double indent = 0,
+  }) => TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(
+        color: color,
+        fontFamily: _font,
+        fontSize: size,
+        height: 1,
+      ),
+    ),
+    maxLines: 1,
+    ellipsis: '…',
+    textDirection: TextDirection.ltr,
+  )..layout(maxWidth: maxBubble - 4 - indent);
+
+  /// Windows' own; where there is none, the platform's.
+  static const _font = 'Segoe UI';
+
+  /// A bubble's widest: a desk's.
+  static const maxBubble = 48.0;
 
   /// What a team member's bubble says: the call it runs ([activityText]),
   /// else what it was asked.
@@ -639,63 +750,7 @@ class CampusPainter extends CustomPainter {
     null => member.label,
   };
 
-  /// [box] kept in [room], moved up a line at a time (up to 8) till clear
-  /// of those [placed]; it joins them.
-  static Rect _free(Rect box, Rect room, List<Rect> placed) {
-    var at = box.shift(
-      Offset(
-        (box.left.clamp(room.left + 1, room.right - box.width - 1) - box.left)
-            .roundToDouble(),
-        0,
-      ),
-    );
-    for (var i = 0; i < 8 && placed.any(at.inflate(1).overlaps); i++) {
-      at = at.shift(Offset(0, -box.height - 2));
-    }
-    placed.add(at);
-    return at;
-  }
-
-  /// A team member's bubble over its head at [rect]: [line] on white,
-  /// as wide as it needs, up to two slots; in [room], clear of [placed].
-  void _say(
-    Canvas canvas,
-    String line,
-    Rect rect,
-    Rect room,
-    List<Rect> placed,
-  ) {
-    final painter = TextPainter(
-      text: TextSpan(
-        text: line,
-        style: const TextStyle(
-          color: Color(0xff1c1c1e),
-          fontSize: 4,
-          height: 1,
-        ),
-      ),
-      maxLines: 1,
-      ellipsis: '…',
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: CampusGeometry.slot * 2);
-    final box = _free(
-      Rect.fromCenter(
-        center: Offset(rect.center.dx, rect.top - 2),
-        width: (painter.width + 4).ceilToDouble(),
-        height: 7,
-      ),
-      room,
-      placed,
-    );
-    canvas
-      ..drawRect(box.inflate(1), Paint()..color = const Color(0xff1c1c1e))
-      ..drawRect(box, Paint()..color = const Color(0xffffffff));
-    painter
-      ..paint(canvas, box.topLeft + const Offset(2, 1.5))
-      ..dispose();
-  }
-
-  /// The "+N" of those not shown, and a "❗" if one of them waits.
+  /// The "+N" of those not shown, and a "!" if one of them waits.
   void _paintMore(Canvas canvas, RoomBox box) {
     // Level 3 shows them all.
     if (box.all) return;
@@ -711,12 +766,11 @@ class CampusPainter extends CustomPainter {
     // Someone waiting among those not shown: the room says so.
     if (box.room.waiting &&
         !box.room.visible.any((a) => a.activity == OfficeActivity.waving)) {
-      _text(
-        canvas,
-        '❗',
-        Rect.fromLTWH(box.rect.right - 9, box.rect.top + 1, 8, 8),
-        size: 6,
-      );
+      final at = Rect.fromLTWH(box.rect.right - 12, box.rect.top + 1, 10, 7);
+      canvas
+        ..drawRect(at.inflate(1), Paint()..color = const Color(0xff1c1c1e))
+        ..drawRect(at, Paint()..color = const Color(0xffffcc00));
+      _mark(canvas, _Mark.wait, at, const Color(0xff1c1c1e));
     }
   }
 
@@ -789,7 +843,7 @@ class CampusPainter extends CustomPainter {
         text: text,
         style: TextStyle(
           color: color ?? colors.waiting,
-          fontFamily: family,
+          fontFamily: family ?? _font,
           package: package,
           fontSize: size,
           fontWeight: bold ? FontWeight.w600 : null,
@@ -814,4 +868,47 @@ class CampusPainter extends CustomPainter {
       old.scenes != scenes ||
       old.highlight != highlight ||
       old.l10n != l10n;
+}
+
+/// A bubble's icon: what one waits for, is done with, is at.
+enum _Mark { wait, done, work }
+
+/// A bubble to draw over the head of the character at [rect].
+class _Say {
+  _Say(
+    this.rect,
+    this.mark, {
+    this.title,
+    this.line,
+    this.character,
+    this.member = false,
+  });
+
+  final Rect rect;
+  final _Mark? mark;
+
+  /// Its conversation's title, small over [line]; none for a team member.
+  final String? title;
+  final String? line;
+  final OfficeCharacter? character;
+  final bool member;
+
+  /// The top of its head, the middle.
+  Offset get head => Offset(rect.center.dx, rect.top + 3);
+
+  /// Who waits on the user first, then who is done, at work, idle.
+  int get priority => switch (mark) {
+    _Mark.wait => 3,
+    _Mark.done => 2,
+    _Mark.work => 1,
+    null => 0,
+  };
+
+  /// Its fill and ink.
+  (Color, Color) get colors => switch (mark) {
+    _Mark.wait => (const Color(0xffffcc00), const Color(0xff1c1c1e)),
+    _Mark.done => (const Color(0xff34c759), const Color(0xffffffff)),
+    _Mark.work => (const Color(0xfff5f5f5), const Color(0xff1c1c1e)),
+    null => (const Color(0xffd1d1d6), const Color(0xff1c1c1e)),
+  };
 }
