@@ -12,7 +12,7 @@ enum OfficeFacing { down, up, right, left }
 /// The office's pictures (assets/office, from Pixel Agents: see its
 /// CREDITS.md), read once for the app.
 class OfficeSprites {
-  OfficeSprites._(this.characters);
+  OfficeSprites._(this.characters, this.floors, this.wall, this.furniture);
 
   /// A character sheet's frame, in its pixels.
   static const frameWidth = 16.0, frameHeight = 32.0;
@@ -23,13 +23,51 @@ class OfficeSprites {
   /// The sheets, by [OfficeAgent.sprite].
   final List<ui.Image> characters;
 
+  /// Grey tiles of 16, tinted as they are drawn.
+  final List<ui.Image> floors;
+
+  /// The wall's 16 pieces of 16×32, 4 a row, by which neighbours are wall
+  /// too: north 1, east 2, south 4, west 8.
+  final ui.Image wall;
+
+  /// By their path in assets/office/furniture, less ".png":
+  /// "DESK/DESK_FRONT".
+  final Map<String, ui.Image> furniture;
+
+  static const _furniture = [
+    'CLOCK/CLOCK',
+    'COFFEE/COFFEE',
+    'DESK/DESK_FRONT',
+    'DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF',
+    'PC/PC_FRONT_OFF',
+    'PC/PC_FRONT_ON_1',
+    'PC/PC_FRONT_ON_2',
+    'PC/PC_FRONT_ON_3',
+    'PLANT/PLANT',
+    'SMALL_PAINTING/SMALL_PAINTING',
+    'SOFA/SOFA_FRONT',
+    'WHITEBOARD/WHITEBOARD',
+    'WOODEN_CHAIR/WOODEN_CHAIR_BACK',
+  ];
+
   static Future<OfficeSprites>? _loading;
   static Future<OfficeSprites> load() => _loading ??= _load();
 
-  static Future<OfficeSprites> _load() async => OfficeSprites._([
-    for (var i = 0; i < OfficeAgent.sprites; i++)
-      await image('assets/office/characters/char_$i.png'),
-  ]);
+  static Future<OfficeSprites> _load() async => OfficeSprites._(
+    [
+      for (var i = 0; i < OfficeAgent.sprites; i++)
+        await image('assets/office/characters/char_$i.png'),
+    ],
+    [
+      for (var i = 0; i < 9; i++)
+        await image('assets/office/floors/floor_$i.png'),
+    ],
+    await image('assets/office/walls/wall_0.png'),
+    {
+      for (final name in _furniture)
+        name: await image('assets/office/furniture/$name.png'),
+    },
+  );
 
   static Future<ui.Image> image(String asset) async {
     final data = await rootBundle.load(asset);
@@ -37,14 +75,36 @@ class OfficeSprites {
     return (await codec.getNextFrame()).image;
   }
 
+  static Paint _crisp([Color? tint]) => Paint()
+    ..filterQuality = FilterQuality.none
+    ..colorFilter = tint == null
+        ? null
+        : ColorFilter.mode(tint, BlendMode.modulate);
+
+  /// Draws [image] whole, pixel for pixel, its top left at [at]; multiplied
+  /// by [tint] if any (the grey floor and wall).
+  void draw(Canvas canvas, ui.Image image, Offset at, {Color? tint}) =>
+      canvas.drawImage(image, at, _crisp(tint));
+
+  /// Draws the wall's piece for [mask] (see [wall]), its top left at [at].
+  void drawWall(Canvas canvas, int mask, Offset at, {Color? tint}) =>
+      canvas.drawImageRect(
+        wall,
+        Rect.fromLTWH(mask % 4 * 16, mask ~/ 4 * 32, 16, 32),
+        Rect.fromLTWH(at.dx, at.dy, 16, 32),
+        _crisp(tint),
+      );
+
   /// Draws [sprite]'s [frame] facing [facing] into [to] (a frame's size at
-  /// a whole scale, so its pixels stay square and crisp).
+  /// a whole scale, so its pixels stay square and crisp); facing down, a
+  /// [badge] of its company's color on its chest.
   void drawCharacter(
     Canvas canvas,
     int sprite,
     Rect to, {
     int frame = 0,
     OfficeFacing facing = OfficeFacing.down,
+    Color? badge,
   }) {
     final row = switch (facing) {
       OfficeFacing.down => 0,
@@ -57,16 +117,24 @@ class OfficeSprites {
       frameWidth,
       frameHeight,
     );
-    final paint = Paint()..filterQuality = FilterQuality.none;
     final sheet = characters[sprite % characters.length];
     if (facing != OfficeFacing.left) {
-      return canvas.drawImageRect(sheet, from, to, paint);
+      canvas.drawImageRect(sheet, from, to, _crisp());
+    } else {
+      canvas
+        ..save()
+        ..translate(to.right + to.left, 0)
+        ..scale(-1, 1)
+        ..drawImageRect(sheet, from, to, _crisp())
+        ..restore();
     }
-    canvas
-      ..save()
-      ..translate(to.right + to.left, 0)
-      ..scale(-1, 1)
-      ..drawImageRect(sheet, from, to, paint)
-      ..restore();
+    if (badge != null && facing == OfficeFacing.down) {
+      // 2 of the frame's pixels, on the left of its chest.
+      final px = to.width / frameWidth;
+      canvas.drawRect(
+        Rect.fromLTWH(to.left + 9 * px, to.top + 19 * px, 2 * px, 2 * px),
+        Paint()..color = badge,
+      );
+    }
   }
 }

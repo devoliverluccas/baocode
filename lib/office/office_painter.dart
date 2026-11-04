@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import 'office_characters.dart';
+import 'office_layout.dart';
 import 'office_model.dart';
 import 'office_sprites.dart';
 
@@ -50,9 +52,9 @@ class CampusGeometry {
   }
 
   static const gap = 8.0, pad = 6.0, signHeight = 14.0;
-  static const roomWidth =
-      OfficeRoom.maxVisible * (OfficeSprites.frameWidth + 2) + 6;
-  static const roomHeight = OfficeSprites.frameHeight + 14;
+  // A room's scene, its wall a tile over its floor (see OfficeLayout).
+  static const roomWidth = OfficeLayout.width;
+  static const roomHeight = OfficeLayout.height;
   static const roomGap = 4.0, dimHeight = 10.0;
 
   /// The whole campus's.
@@ -148,6 +150,7 @@ class CampusPainter extends CustomPainter {
     required this.scale,
     required this.colors,
     this.sprites,
+    this.scenes,
     super.repaint,
   });
 
@@ -157,6 +160,9 @@ class CampusPainter extends CustomPainter {
 
   /// Null while they load: boxes stand in for the characters.
   final OfficeSprites? sprites;
+
+  /// The rooms' characters on the move; null: each stands still in a row.
+  final OfficeScenes? scenes;
 
   /// A building's own color; grey ([OfficeColors.muted]) without one.
   Color colorOf(OfficeBuilding building) => switch (building.color) {
@@ -189,24 +195,56 @@ class CampusPainter extends CustomPainter {
       bold: true,
     );
     for (final room in box.rooms) {
-      paintRoom(canvas, room);
+      paintRoom(canvas, room, badge: color);
     }
     paintDim(canvas, box);
   }
 
-  /// A room and who is in it. Where the characters move and animate (see
-  /// lib/office/office_characters.dart), that draws them instead.
-  void paintRoom(Canvas canvas, RoomBox box) {
+  /// A room and who is in it, their company's [badge] on them: its scene
+  /// (lib/office/office_characters.dart) where there is one.
+  void paintRoom(Canvas canvas, RoomBox box, {Color? badge}) {
+    final label = Rect.fromLTWH(
+      box.rect.left + 3,
+      box.rect.top + 2,
+      box.rect.width - 6,
+      8,
+    );
+    if ((sprites, scenes?[box.room.project]) case (
+      final sprites?,
+      final scene?,
+    )) {
+      canvas
+        ..save()
+        ..clipRect(box.rect);
+      scene.paint(
+        canvas,
+        box.rect.topLeft,
+        sprites,
+        floor: box.room.project.name.length,
+        badge: badge,
+        tick: scenes!.tick,
+      );
+      canvas
+        ..restore()
+        ..drawRect(box.rect, _stroke(colors.border))
+        ..drawRect(
+          Rect.fromLTWH(label.left - 2, label.top - 1, label.width + 4, 9),
+          Paint()..color = const Color(0x99000000),
+        );
+      _text(
+        canvas,
+        box.room.project.name,
+        label,
+        size: 6,
+        color: const Color(0xffffffff),
+      );
+      _paintMore(canvas, box);
+      return;
+    }
     canvas
       ..drawRect(box.rect, Paint()..color = colors.room)
       ..drawRect(box.rect, _stroke(colors.border));
-    _text(
-      canvas,
-      box.room.project.name,
-      Rect.fromLTWH(box.rect.left + 3, box.rect.top + 2, box.rect.width - 6, 8),
-      size: 6,
-      color: colors.text,
-    );
+    _text(canvas, box.room.project.name, label, size: 6, color: colors.text);
     for (final (agent, rect) in box.agents) {
       switch (sprites) {
         case final sprites?:
@@ -218,6 +256,11 @@ class CampusPainter extends CustomPainter {
         _text(canvas, '❗', rect.translate(4, -6), size: 7);
       }
     }
+    _paintMore(canvas, box);
+  }
+
+  /// The "+N" of those not shown, and a "❗" if one of them waits.
+  void _paintMore(Canvas canvas, RoomBox box) {
     if (box.room.overflow > 0) {
       _text(
         canvas,
@@ -299,5 +342,6 @@ class CampusPainter extends CustomPainter {
       old.geometry != geometry ||
       old.scale != scale ||
       old.colors != colors ||
-      old.sprites != sprites;
+      old.sprites != sprites ||
+      old.scenes != scenes;
 }

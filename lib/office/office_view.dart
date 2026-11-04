@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../base/step_clock.dart';
 import '../l10n/l10n.dart';
 import '../sidebar/sidebar.dart' show SidebarIconButton;
 import '../theme/app_theme.dart';
@@ -8,6 +9,7 @@ import '../workspace/companies.dart';
 import '../workspace/islands.dart';
 import '../workspace/title_bar_double_click.dart';
 import '../workspace/workspace.dart';
+import 'office_characters.dart';
 import 'office_model.dart';
 import 'office_painter.dart';
 import 'office_sprites.dart';
@@ -47,6 +49,37 @@ class OfficeView extends StatefulWidget {
 class OfficeViewState extends State<OfficeView> {
   OfficeSprites? _sprites;
 
+  /// The rooms' characters, on [_clock]: at its quickest while one walks,
+  /// slower while all sit or stand at their work. Stopped, all still, where
+  /// motion is turned down.
+  final _scenes = OfficeScenes();
+  late final _clock = StepClock(_slow)..addListener(_tick);
+  static const _slow = Duration(milliseconds: 150);
+  Duration _ticked = Duration.zero;
+  bool _still = false;
+
+  void _tick() {
+    final now = _clock.time;
+    // A late or first tick: no leap across the room.
+    final seconds = (now - _ticked).inMicroseconds / 1e6;
+    _ticked = now;
+    _scenes.update(seconds.clamp(0, 0.25));
+    _clock.step = _scenes.moving ? StepClock.frame : _slow;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _still = _clock.keepTo(context);
+    _ticked = _clock.time;
+  }
+
+  @override
+  void dispose() {
+    _clock.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +104,7 @@ class OfficeViewState extends State<OfficeView> {
           Companies.instance,
           noCompany: l10n.officeNoCompany,
         );
+        _scenes.sync(campus, still: _still);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -122,9 +156,11 @@ class OfficeViewState extends State<OfficeView> {
             child: SingleChildScrollView(
               child: GestureDetector(
                 onTapUp: (details) {
-                  final agent = geometry.agentAt(
-                    details.localPosition / scale.toDouble(),
-                  );
+                  final at = details.localPosition / scale.toDouble();
+                  // Where they walk, once drawn; else in their row.
+                  final agent = _sprites == null
+                      ? geometry.agentAt(at)
+                      : _scenes.agentAt(geometry, at);
                   if (agent?.thread case final thread?) {
                     widget.onOpenAgent(thread);
                   }
@@ -135,6 +171,8 @@ class OfficeViewState extends State<OfficeView> {
                     geometry: geometry,
                     scale: scale,
                     sprites: _sprites,
+                    scenes: _scenes,
+                    repaint: _clock,
                     colors: (
                       text: AppColors.text,
                       muted: AppColors.textMuted,
