@@ -17,18 +17,26 @@ enum _Pose { sit, stand }
 /// its PC whatever it does (stands by it, waving, to ask), and leaves by
 /// the door.
 class OfficeCharacter {
-  OfficeCharacter._(this.agent, this.tile, {this.parent})
+  OfficeCharacter._(this.agent, this.tile, {this.lead})
     : activity = agent.activity,
       status = agent.status,
       current = agent.source.current,
       position = _center(tile);
 
-  /// Its conversation, as last synced; an intern's is its parent's.
+  /// Its conversation, as last synced; a team member's is its lead's.
   OfficeAgent agent;
 
-  /// Its boss, for an intern: in while that runs a subagent.
-  final OfficeCharacter? parent;
-  OfficeCharacter? _intern;
+  /// Its lead, for a team member: in while that runs its subagent.
+  final OfficeCharacter? lead;
+
+  /// The subagent it is, for a team member.
+  TeamMember? member;
+
+  /// A lead's: its conversation's subagents at work ([teamOf]), those of
+  /// them in the room by id, and how many there was no seat for.
+  List<TeamMember> team = const [];
+  final _team = <String, OfficeCharacter>{};
+  int teamOverflow = 0;
 
   OfficeActivity activity;
 
@@ -63,7 +71,7 @@ class OfficeCharacter {
 
   bool get walking => path.isNotEmpty;
   bool get sitting => !walking && _pose == _Pose.sit;
-  bool get isIntern => parent != null;
+  bool get isMember => lead != null;
 
   /// Where it is, in the room's pixels (see [RoomScene.origin]): its feet,
   /// on its tile's middle.
@@ -73,7 +81,7 @@ class OfficeCharacter {
   int get frame {
     if (walking) return const [0, 1, 2, 1][_frame % 4];
     final two = _frame % 2;
-    if (isIntern) return 1;
+    if (isMember) return sitting ? 3 + two : 1;
     return switch (activity) {
       OfficeActivity.reading => 5 + two,
       OfficeActivity.typing ||
@@ -156,7 +164,7 @@ class OfficeCharacter {
   }
 }
 
-/// A room's characters: one per agent synced ([sync]), and the interns.
+/// A room's characters: one per agent synced ([sync]), and their teams.
 class RoomScene {
   RoomScene({OfficeLayout? layout}) : layout = layout ?? OfficeLayout.room;
 
@@ -164,12 +172,19 @@ class RoomScene {
 
   final _byKey = <Object, OfficeCharacter>{};
 
-  /// Those still in, interns too, in no order.
+  /// At most this many of a lead's team come in; the rest are its
+  /// [OfficeCharacter.teamOverflow].
+  static const maxTeam = 3;
+
+  /// Those still in, teams too, in no order.
   List<OfficeCharacter> get characters => [
-    for (final character in _byKey.values) ...[character, ?character._intern],
-    ..._leavingInterns,
+    for (final character in _byKey.values) ...[
+      character,
+      ...character._team.values,
+    ],
+    ..._leavingMembers,
   ];
-  final _leavingInterns = <OfficeCharacter>[];
+  final _leavingMembers = <OfficeCharacter>[];
 
   /// Someone walks: frames to draw at the clock's quickest.
   bool get moving => characters.any((c) => c.walking);
@@ -195,6 +210,7 @@ class RoomScene {
         ..activity = agent.activity
         ..status = agent.status
         ..current = agent.source.current
+        ..team = agent.team
         ..leaving = false;
     }
     _place(still: still);
@@ -208,7 +224,8 @@ class RoomScene {
         character
           ..status = thread.shownStatus
           ..current = runningItem(thread)
-          ..activity = activityOf(character.status, kindOf(character.current));
+          ..activity = activityOf(character.status, kindOf(character.current))
+          ..team = teamOf(thread);
       }
     }
   }
@@ -219,6 +236,7 @@ class RoomScene {
       for (final c in characters)
         if (c.desk case final desk?) desk.tile,
     };
+    final taken = <Tile>{};
     for (final character in characters) {
       if (character.leaving) {
         _leave(character);
@@ -239,7 +257,12 @@ class RoomScene {
       } else {
         character._goTo(layout, desk, _Pose.sit);
       }
-      _keepIntern(character);
+      if (character._goal case final goal?) taken.add(goal.tile);
+    }
+    // The teams after: who leads a conversation has the desks first.
+    taken.addAll(desks);
+    for (final character in characters) {
+      if (!character.leaving) _keepTeam(character, taken);
     }
     if (still) {
       for (final character in this.characters) {
@@ -252,28 +275,54 @@ class RoomScene {
   void _leave(OfficeCharacter character) {
     character.leaving = true;
     character._goTo(layout, Seat(layout.door, OfficeFacing.up), _Pose.stand);
-    if (character._intern case final intern?) {
-      _leavingInterns.add(intern);
-      character._intern = null;
-      _leave(intern);
+    for (final member in character._team.values) {
+      _leavingMembers.add(member);
+      _leave(member);
     }
+    character._team.clear();
   }
 
-  /// In beside [boss] while it runs a subagent; out by the door after.
-  void _keepIntern(OfficeCharacter boss) {
-    final running = boss.activity == OfficeActivity.intern;
-    if (running && boss._intern == null && boss.desk != null) {
-      final intern = boss._intern = OfficeCharacter._(
-        boss.agent,
-        layout.door,
-        parent: boss,
-      );
-      intern._goTo(layout, layout.besides(boss.desk!), _Pose.stand);
-    } else if (!running && boss._intern != null) {
-      _leavingInterns.add(boss._intern!);
-      _leave(boss._intern!);
-      boss._intern = null;
+  /// [lead]'s team in, up to [maxTeam], each to the free desk nearest its
+  /// lead's (sat, at work) or round the meeting table, none of [taken];
+  /// who is done, or has no seat, out by the door.
+  void _keepTeam(OfficeCharacter lead, Set<Tile> taken) {
+    final desk = lead.desk;
+    final team = desk == null ? const <TeamMember>[] : lead.team;
+    final ids = {for (final member in team) member.id};
+    for (final id in [...lead._team.keys]) {
+      if (!ids.contains(id)) _leaveTeam(lead, id);
     }
+    var placed = 0;
+    for (final member in team.take(maxTeam)) {
+      final character = lead._team[member.id] ??= OfficeCharacter._(
+        lead.agent,
+        layout.door,
+        lead: lead,
+      );
+      character.member = member;
+      final kept = character._goal;
+      final seat = kept != null && !taken.contains(kept.tile)
+          ? kept
+          : layout.teamSeat(desk!, taken);
+      if (seat == null) {
+        _leaveTeam(lead, member.id);
+        continue;
+      }
+      taken.add(seat.tile);
+      placed++;
+      character._goTo(
+        layout,
+        seat,
+        layout.desks.any((d) => d.tile == seat.tile) ? _Pose.sit : _Pose.stand,
+      );
+    }
+    lead.teamOverflow = team.length - placed;
+  }
+
+  void _leaveTeam(OfficeCharacter lead, String id) {
+    final member = lead._team.remove(id)!;
+    _leavingMembers.add(member);
+    _leave(member);
   }
 
   /// Takes out who has left: at the door ([all]: wherever they are).
@@ -281,7 +330,7 @@ class RoomScene {
     bool out(OfficeCharacter c) =>
         c.leaving && (all || (!c.walking && c.tile == layout.door));
     _byKey.removeWhere((_, c) => out(c));
-    _leavingInterns.removeWhere(out);
+    _leavingMembers.removeWhere(out);
   }
 
   double _sinceFollow = 0;
@@ -295,8 +344,8 @@ class RoomScene {
       _place(still: false);
     }
     for (final character in characters) {
-      if (character.isIntern && !character.leaving) {
-        character.agent = character.parent!.agent;
+      if (character.isMember && !character.leaving) {
+        character.agent = character.lead!.agent;
       }
       character._update(seconds);
     }
@@ -438,12 +487,12 @@ class RoomScene {
     final rect = character.rect.shift(origin);
     sprites.drawCharacter(
       canvas,
-      character.isIntern ? character.agent.sprite + 3 : character.agent.sprite,
+      character.member?.sprite ?? character.agent.sprite,
       rect,
       frame: character.frame,
       facing: character.facing,
-      hue: character.isIntern ? 0 : character.agent.hue,
-      badge: character.isIntern ? null : badge,
+      hue: character.member?.hue ?? character.agent.hue,
+      badge: character.isMember ? null : badge,
     );
   }
 }
@@ -485,8 +534,8 @@ class OfficeScenes {
     }
   }
 
-  /// The character at [at], in [geometry]'s pixels, and where it is: an
-  /// intern's agent is its boss's. Those a scene has no desk for (level 3)
+  /// The character at [at], in [geometry]'s pixels, and where it is: a
+  /// team member's agent is its lead's. Those a scene has no desk for (level 3)
   /// stand still in [RoomBox.beyond].
   (OfficeAgent, Rect)? find(CampusGeometry geometry, Offset at) {
     for (final building in geometry.buildings) {

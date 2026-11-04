@@ -457,9 +457,24 @@ class CampusPainter extends CustomPainter {
       final origin = RoomScene.origin(box.rect.topLeft);
       for (final character in scene.characters) {
         character.bubble = null;
-        if (character.isIntern || character.leaving) continue;
+        if (character.leaving) continue;
         final rect = character.rect.shift(origin);
-        if (geometry.labeled) _title(canvas, character.agent, rect);
+        if (character.member case final member?) {
+          if (geometry.labeled && !character.walking) {
+            _say(canvas, _memberLine(member), rect);
+          }
+          continue;
+        }
+        if (geometry.labeled) {
+          _title(canvas, character.agent, rect);
+          if (character.teamOverflow > 0) {
+            _say(
+              canvas,
+              '+${character.teamOverflow}',
+              rect.shift(const Offset(9, 6)),
+            );
+          }
+        }
         if (character.walking) continue;
         character.bubble = _bubble(
           canvas,
@@ -607,6 +622,46 @@ class CampusPainter extends CustomPainter {
     size: 4,
     color: colors.text,
   );
+
+  /// What a team member's bubble says: the call it runs ([activityText]),
+  /// else what it was asked.
+  String _memberLine(TeamMember member) => switch (member.tool) {
+    final tool? => activityText(
+      ThreadStatus.running,
+      tool,
+      l10n ?? englishLocalizations,
+    )!,
+    null => member.label,
+  };
+
+  /// A team member's bubble over its head at [rect]: [line] on white,
+  /// as wide as it needs, up to two slots.
+  void _say(Canvas canvas, String line, Rect rect) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: line,
+        style: const TextStyle(
+          color: Color(0xff1c1c1e),
+          fontSize: 4,
+          height: 1,
+        ),
+      ),
+      maxLines: 1,
+      ellipsis: '…',
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: CampusGeometry.slot * 2);
+    final box = Rect.fromCenter(
+      center: Offset(rect.center.dx, rect.top - 2),
+      width: painter.width + 4,
+      height: 7,
+    );
+    canvas
+      ..drawRect(box.inflate(1), Paint()..color = const Color(0xff1c1c1e))
+      ..drawRect(box, Paint()..color = const Color(0xffffffff));
+    painter
+      ..paint(canvas, box.topLeft + const Offset(2, 1.5))
+      ..dispose();
+  }
 
   /// The "+N" of those not shown, and a "❗" if one of them waits.
   void _paintMore(Canvas canvas, RoomBox box) {

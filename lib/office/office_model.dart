@@ -1,6 +1,7 @@
 import '../chat/chat_models.dart';
 import '../chat/widgets/tool_call_row.dart' show toolVerb;
 import '../l10n/l10n.dart';
+import '../kernel/kernel_types.dart' show KernelTask, KernelTaskKind;
 import '../workspace/companies.dart';
 import '../workspace/workspace.dart';
 
@@ -22,7 +23,7 @@ enum OfficeActivity {
   /// On the web: at the window.
   window,
 
-  /// Running a subagent: an intern comes in.
+  /// Running a subagent: at its desk, its team beside it ([teamOf]).
   intern,
 
   /// Finished, unseen: a ✅ bubble.
@@ -105,6 +106,7 @@ class OfficeThread {
     required this.status,
     this.active = false,
     this.current,
+    this.team = const [],
     this.thread,
   });
 
@@ -118,6 +120,9 @@ class OfficeThread {
   /// What its turn runs now ([runningItem]): a [ToolCallItem], an
   /// [AgentItem] or the [LiveStatusItem] of one thinking; null if none.
   final ChatItem? current;
+
+  /// The subagents at work for it now ([teamOf]).
+  final List<TeamMember> team;
 
   /// The conversation, to open and act on; null only in tests.
   final AgentThread? thread;
@@ -147,6 +152,7 @@ class OfficeAgent {
   AgentThread? get thread => source.thread;
   String get title => source.title;
   ThreadStatus get status => source.status;
+  List<TeamMember> get team => source.team;
 
   /// How many character sheets there are (assets/office/characters).
   static const sprites = 6;
@@ -154,6 +160,75 @@ class OfficeAgent {
   // Not String.hashCode: the same from run to run.
   static int hashOf(String key) =>
       key.codeUnits.fold(0, (sum, unit) => (sum * 31 + unit) & 0xfffffff);
+}
+
+/// A subagent at work for a conversation: in its room beside it while it
+/// runs, a character of its own.
+class TeamMember {
+  const TeamMember({required this.id, required this.label, this.tool});
+
+  /// Its tool call's ([AgentItem.id], [KernelTask.toolUseId]) or task's
+  /// id: its seat and its look.
+  final String id;
+
+  /// What it was asked to do ([AgentItem.description]).
+  final String label;
+
+  /// The call it runs now, if seen.
+  final ToolCallItem? tool;
+
+  /// Its look, as a conversation's ([OfficeAgent.sprite], [OfficeAgent.hue]).
+  int get hash => OfficeAgent.hashOf(id);
+  int get sprite => hash % OfficeAgent.sprites;
+  double get hue => hash ~/ OfficeAgent.sprites % 8 * 45.0;
+}
+
+/// The team of a conversation whose history is [items], [tasks] running
+/// beside it ([ChatSession.tasks]): the subagents its turn runs (since the
+/// last user message), those left to run in the background before it, and
+/// the tasks of agents of no card here (a workflow's). In the order they
+/// came; who is done is out.
+List<TeamMember> teamIn(List<ChatItem> items, [List<KernelTask>? tasks]) {
+  final team = <TeamMember>[];
+  var turn = true;
+  for (final item in items.reversed) {
+    switch (item) {
+      case UserMessageItem():
+        turn = false;
+      case AgentItem(status: CommandStatus.running, :final background)
+          when turn || background:
+        team.add(
+          TeamMember(
+            id: item.id ?? item.description,
+            label: item.agentType == null || item.description != 'Subagent'
+                ? item.description
+                : item.agentType!,
+            tool: item.children.reversed
+                .whereType<ToolCallItem>()
+                .where((call) => call.status == ToolStatus.running)
+                .firstOrNull,
+          ),
+        );
+      default:
+    }
+  }
+  final ids = {for (final member in team) member.id};
+  return [
+    ...team.reversed,
+    for (final task in tasks ?? const <KernelTask>[])
+      if (task.kind != KernelTaskKind.command &&
+          !ids.contains(task.toolUseId ?? task.id))
+        TeamMember(id: task.toolUseId ?? task.id, label: task.description),
+  ];
+}
+
+/// [thread]'s team ([teamIn]), not read from a session not open.
+List<TeamMember> teamOf(AgentThread thread) {
+  if (!thread.isOpen) return const [];
+  final session = thread.session;
+  return teamIn([
+    for (var i = 0; i < session.itemCount; i++) session.itemAt(i),
+  ], session.tasks);
 }
 
 /// A project with conversations in the Ativas.
@@ -294,6 +369,7 @@ OfficeCampus campusOf(
           status: thread.shownStatus,
           active: thread.active,
           current: runningItem(thread),
+          team: teamOf(thread),
           thread: thread,
         ),
     ],
