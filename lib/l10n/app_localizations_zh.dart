@@ -12931,4 +12931,21 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get companyNoneTooltip =>
       'This project is in no company: it runs with the default Claude account. Click to put it in one.';
+
+  @override
+  String get officeTitle => '办公室';
+
+  @override
+  String get officeClose => '关闭办公室';
+
+  @override
+  String get officeNoCompany => '无公司';
+
+  @override
+  String get officeEmpty => '没有可显示的项目';
+
+  @override
+  String officeReception(int working, int waiting, int done) {
+    return '$working 个工作中 · $waiting 个等你 · $done 个完成';
+  }
 }

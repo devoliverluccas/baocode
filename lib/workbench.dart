@@ -91,6 +91,7 @@ import 'l10n/l10n.dart';
 import 'notifications/attention_host.dart';
 import 'notifications/attention_service.dart';
 import 'notifications/attention_settings.dart';
+import 'office/office_view.dart';
 import 'platform/data_dir.dart' show DataDirectory;
 import 'platform/event_log.dart' show appEvent;
 import 'platform/local_paths.dart'
@@ -1313,15 +1314,15 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     if (kind != null) _customizeKey.currentState?.show(kind);
     setState(() {
       _customizing = true;
-      _stashing = false;
+      _stashing = _office = false;
       if (kind != null) _customizeKind = kind;
     });
   }
 
   /// The conversations show again, in place of Customize or the stashes.
   void _closeCustomize() {
-    if (_customizing || _stashing) {
-      setState(() => _customizing = _stashing = false);
+    if (_customizing || _stashing || _office) {
+      setState(() => _customizing = _stashing = _office = false);
     }
   }
 
@@ -1336,7 +1337,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   final GlobalKey<StashViewState> _stashKey = GlobalKey();
 
   /// Something shows in place of the conversations.
-  bool get _replacingChat => _customizing || _stashing;
+  bool get _replacingChat => _customizing || _stashing || _office;
 
   /// Shows the stashes, [id]'s if given.
   void _showStash([int? id]) {
@@ -1345,8 +1346,22 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     if (id != null) _stashKey.currentState?.show(id);
     setState(() {
       _stashing = true;
-      _customizing = false;
+      _customizing = _office = false;
       _stashShown = id;
+    });
+  }
+
+  // --- The office -------------------------------------------------------------
+
+  /// The office (lib/office) shows in place of the chat: the agents in a
+  /// building per company.
+  bool _office = false;
+
+  void _showOffice() {
+    _closeDrawer();
+    setState(() {
+      _office = true;
+      _customizing = _stashing = false;
     });
   }
 
@@ -3217,6 +3232,10 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           ? null
           : () => _stashing ? _closeCustomize() : _showStash(),
       stashing: _stashing,
+      onOffice: agent != null
+          ? null
+          : () => _office ? _closeCustomize() : _showOffice(),
+      office: _office,
       // Opened on the Stash page, which an agent's window has not.
       stashes: switch (StashController.current) {
         final stash? when agent == null => sidebarStashes(stash, _showStash),
@@ -4318,6 +4337,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       };
 
   Widget _buildGrid({required bool showToggle}) {
+    if (_office) return _footless(_buildOffice(showToggle: showToggle));
     if (_stashing) {
       if (StashController.current case final stash?) {
         return _footless(_buildStash(stash, showToggle: showToggle));
@@ -4362,6 +4382,28 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       onClose: _closeCustomize,
       onOpenAgent: _openAgent,
       onHotkeySettings: () => unawaited(openSettings(SettingsSection.stash)),
+      island: AppColors.conversationSurface,
+      leading: !header && showToggle
+          ? SidebarIconButton(
+              icon: Codicons.layoutSidebarLeftOff,
+              tooltip: context.l10n.windowShowSidebar,
+              command: 'workbench.action.toggleSidebarVisibility',
+              onTap: _toggle,
+            )
+          : null,
+      titleBarInset: !header && showToggle
+          ? AppMetrics.trafficLightsWidth + 8
+          : 12.0,
+    );
+  }
+
+  /// The office, in place of the conversations, as the stashes are.
+  Widget _buildOffice({required bool showToggle}) {
+    final header = WindowControls.drawsHeader;
+    return OfficeView(
+      workspace: _workspace,
+      onClose: _closeCustomize,
+      onOpenAgent: _openAgent,
       island: AppColors.conversationSurface,
       leading: !header && showToggle
           ? SidebarIconButton(

@@ -13681,4 +13681,21 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get companyNoneTooltip =>
       'This project is in no company: it runs with the default Claude account. Click to put it in one.';
+
+  @override
+  String get officeTitle => 'Office';
+
+  @override
+  String get officeClose => 'Close the office';
+
+  @override
+  String get officeNoCompany => 'No company';
+
+  @override
+  String get officeEmpty => 'No projects to show';
+
+  @override
+  String officeReception(int working, int waiting, int done) {
+    return '$working working · $waiting waiting for you · $done done';
+  }
 }

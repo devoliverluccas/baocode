@@ -224,6 +224,8 @@ class Sidebar extends StatefulWidget {
     this.onStash,
     this.stashing = false,
     this.stashes,
+    this.onOffice,
+    this.office = false,
     this.drag,
     this.link,
     this.current,
@@ -312,6 +314,13 @@ class Sidebar extends StatefulWidget {
   /// The stashes each conversation carries out, on its row; none without
   /// the Stash.
   final SidebarStashes? stashes;
+
+  /// Shows the office in place of the chat (lib/office); no Office row
+  /// without it.
+  final VoidCallback? onOffice;
+
+  /// It shows: the Office row is selected.
+  final bool office;
 
   /// An agent was opened or created from here (the drawer closes).
   final VoidCallback? onOpened;
@@ -473,13 +482,14 @@ class _SidebarState extends State<Sidebar>
     }
     // Customize or the Stash shown: its row is the one picked, not the
     // conversation picked before it.
-    if (_onPage && !(oldWidget.customizing || oldWidget.stashing)) {
+    if (_onPage &&
+        !(oldWidget.customizing || oldWidget.stashing || oldWidget.office)) {
       _listSelection.select(null);
     }
   }
 
-  /// Customize or the Stash is shown in place of the chat.
-  bool get _onPage => widget.customizing || widget.stashing;
+  /// Customize, the Stash or the office is shown in place of the chat.
+  bool get _onPage => widget.customizing || widget.stashing || widget.office;
 
   @override
   void dispose() {
@@ -1248,9 +1258,17 @@ class _SidebarState extends State<Sidebar>
                 onTap: stash,
               ),
             },
+          if (widget.onOffice case final office?)
+            _NavRow(
+              icon: Codicons.organization,
+              label: context.l10n.officeTitle,
+              selected: widget.office,
+              onTap: office,
+            ),
           if (widget.onSearch != null ||
               widget.onCustomize != null ||
-              widget.onStash != null)
+              widget.onStash != null ||
+              widget.onOffice != null)
             const SizedBox(height: 4),
           _buildGroupingBar(),
           Expanded(child: _buildList()),

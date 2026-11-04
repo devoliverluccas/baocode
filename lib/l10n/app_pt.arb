@@ -3718,5 +3718,10 @@
   "addDirNeedsMessage": "Envie uma mensagem antes: a pasta fica guardada com a conversa.",
   "cmdChatNextNeedingYou": "Ir para a Próxima Conversa que Precisa de Você",
   "companyNone": "Conta padrão",
-  "companyNoneTooltip": "Este projeto não está em nenhuma empresa: roda com a conta padrão do Claude. Clique para colocá-lo em uma."
+  "companyNoneTooltip": "Este projeto não está em nenhuma empresa: roda com a conta padrão do Claude. Clique para colocá-lo em uma.",
+  "officeTitle": "Escritório",
+  "officeClose": "Fechar o escritório",
+  "officeNoCompany": "Sem empresa",
+  "officeEmpty": "Nenhum projeto para mostrar",
+  "officeReception": "{working} trabalhando · {waiting} esperando você · {done} prontas"
 }

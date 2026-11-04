@@ -22268,6 +22268,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This project is in no company: it runs with the default Claude account. Click to put it in one.'**
   String get companyNoneTooltip;
+
+  /// No description provided for @officeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Office'**
+  String get officeTitle;
+
+  /// No description provided for @officeClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close the office'**
+  String get officeClose;
+
+  /// No description provided for @officeNoCompany.
+  ///
+  /// In en, this message translates to:
+  /// **'No company'**
+  String get officeNoCompany;
+
+  /// No description provided for @officeEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No projects to show'**
+  String get officeEmpty;
+
+  /// No description provided for @officeReception.
+  ///
+  /// In en, this message translates to:
+  /// **'{working} working · {waiting} waiting for you · {done} done'**
+  String officeReception(int working, int waiting, int done);
 }
 
 class _AppLocalizationsDelegate

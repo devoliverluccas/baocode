@@ -3672,5 +3672,10 @@
   "ustatUpstreamRates": "上游倍率",
   "ustatUpstreamRatesDetail": "这些上游里没有单独设价的模型，按别处同名模型的价格乘以倍率计算。",
   "ustatUpstreamRateClear": "清除倍率",
-  "ustatContextUnpickHint": "再次点击取消选中，回到当前上下文"
+  "ustatContextUnpickHint": "再次点击取消选中，回到当前上下文",
+  "officeTitle": "办公室",
+  "officeClose": "关闭办公室",
+  "officeNoCompany": "无公司",
+  "officeEmpty": "没有可显示的项目",
+  "officeReception": "{working} 个工作中 · {waiting} 个等你 · {done} 个完成"
 }

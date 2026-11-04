@@ -8684,5 +8684,17 @@
   "addDirNeedsMessage": "Send a message first: the folder is kept with the conversation.",
   "cmdChatNextNeedingYou": "Go to Next Agent Needing You",
   "companyNone": "Default account",
-  "companyNoneTooltip": "This project is in no company: it runs with the default Claude account. Click to put it in one."
+  "companyNoneTooltip": "This project is in no company: it runs with the default Claude account. Click to put it in one.",
+  "officeTitle": "Office",
+  "officeClose": "Close the office",
+  "officeNoCompany": "No company",
+  "officeEmpty": "No projects to show",
+  "officeReception": "{working} working · {waiting} waiting for you · {done} done",
+  "@officeReception": {
+    "placeholders": {
+      "working": {"type": "int"},
+      "waiting": {"type": "int"},
+      "done": {"type": "int"}
+    }
+  }
 }

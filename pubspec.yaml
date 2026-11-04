@@ -129,6 +129,23 @@ flutter:
     # Emojibase's emoji, for project icons (tool/generate_emoji.mjs).
     - assets/emoji/
     - assets/network/
+    # The office's pixel art, from Pixel Agents (assets/office/CREDITS.md).
+    - assets/office/
+    - assets/office/characters/
+    - assets/office/floors/
+    - assets/office/walls/
+    - assets/office/furniture/BOOKSHELF/
+    - assets/office/furniture/CLOCK/
+    - assets/office/furniture/COFFEE/
+    - assets/office/furniture/COFFEE_TABLE/
+    - assets/office/furniture/DESK/
+    - assets/office/furniture/DOUBLE_BOOKSHELF/
+    - assets/office/furniture/PC/
+    - assets/office/furniture/PLANT/
+    - assets/office/furniture/SMALL_PAINTING/
+    - assets/office/furniture/SOFA/
+    - assets/office/furniture/WHITEBOARD/
+    - assets/office/furniture/WOODEN_CHAIR/
     # VS Code TextMate grammars and color themes (tool/generate_textmate_assets.mjs).
 
   # VS Code's icon font (tool/generate_codicons.mjs; lib/theme/codicons.dart).
