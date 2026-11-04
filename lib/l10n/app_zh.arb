@@ -3681,5 +3681,11 @@
   "officeBack": "返回上一级",
   "officeNoAgents": "没有活跃的代理——激活一个对话",
   "officeAssign": "分配",
-  "officeAssignTooltip": "将这些项目放入公司"
+  "officeAssignTooltip": "将这些项目放入公司",
+  "officeDoneOpen": "✅ 完成 — 打开",
+  "officeNeedsYou": "! 需要你",
+  "officeThinking": "思考中…",
+  "officeUsing": "使用 {name}",
+  "officeWorkflow": "工作流 {name}",
+  "officeDelegating": "委派：{what}"
 }

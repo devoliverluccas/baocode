@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
@@ -81,6 +82,28 @@ class OfficeSprites {
         ? null
         : ColorFilter.mode(tint, BlendMode.modulate);
 
+  /// Colors turned [degrees] round the wheel, their lightness kept: Pixel
+  /// Agents' hueShift, for characters of one sheet told apart.
+  static ColorFilter hueTurn(double degrees) {
+    final a = degrees * math.pi / 180;
+    final (c, s) = (math.cos(a), math.sin(a));
+    return ColorFilter.matrix([
+      0.213 + c * 0.787 - s * 0.213,
+      0.715 - c * 0.715 - s * 0.715,
+      0.072 - c * 0.072 + s * 0.928,
+      0, 0, //
+      0.213 - c * 0.213 + s * 0.143,
+      0.715 + c * 0.285 + s * 0.140,
+      0.072 - c * 0.072 - s * 0.283,
+      0, 0, //
+      0.213 - c * 0.213 - s * 0.787,
+      0.715 - c * 0.715 + s * 0.715,
+      0.072 + c * 0.928 + s * 0.072,
+      0, 0, //
+      0, 0, 0, 1, 0,
+    ]);
+  }
+
   /// Draws [image] whole, pixel for pixel, its top left at [at]; multiplied
   /// by [tint] if any (the grey floor and wall).
   void draw(Canvas canvas, ui.Image image, Offset at, {Color? tint}) =>
@@ -96,14 +119,16 @@ class OfficeSprites {
       );
 
   /// Draws [sprite]'s [frame] facing [facing] into [to] (a frame's size at
-  /// a whole scale, so its pixels stay square and crisp); facing down, a
-  /// [badge] of its company's color on its chest.
+  /// a whole scale, so its pixels stay square and crisp), its colors turned
+  /// by [hue] degrees ([hueTurn]); a [badge] of its company's color on its
+  /// chest, or on its back.
   void drawCharacter(
     Canvas canvas,
     int sprite,
     Rect to, {
     int frame = 0,
     OfficeFacing facing = OfficeFacing.down,
+    double hue = 0,
     Color? badge,
   }) {
     final row = switch (facing) {
@@ -118,21 +143,25 @@ class OfficeSprites {
       frameHeight,
     );
     final sheet = characters[sprite % characters.length];
+    final paint = _crisp();
+    if (hue != 0) paint.colorFilter = hueTurn(hue);
     if (facing != OfficeFacing.left) {
-      canvas.drawImageRect(sheet, from, to, _crisp());
+      canvas.drawImageRect(sheet, from, to, paint);
     } else {
       canvas
         ..save()
         ..translate(to.right + to.left, 0)
         ..scale(-1, 1)
-        ..drawImageRect(sheet, from, to, _crisp())
+        ..drawImageRect(sheet, from, to, paint)
         ..restore();
     }
-    if (badge != null && facing == OfficeFacing.down) {
-      // 2 of the frame's pixels, on the left of its chest.
+    if (badge != null) {
+      // 2 of the frame's pixels, left of its chest or back; mirrored, as
+      // the sheet is, facing left.
       final px = to.width / frameWidth;
+      final x = facing == OfficeFacing.left ? 5 : 9;
       canvas.drawRect(
-        Rect.fromLTWH(to.left + 9 * px, to.top + 19 * px, 2 * px, 2 * px),
+        Rect.fromLTWH(to.left + x * px, to.top + 19 * px, 2 * px, 2 * px),
         Paint()..color = badge,
       );
     }

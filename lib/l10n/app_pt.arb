@@ -3727,5 +3727,11 @@
   "officeBack": "Voltar um nível",
   "officeNoAgents": "Nenhum agente ativo — ative uma conversa",
   "officeAssign": "atribuir",
-  "officeAssignTooltip": "Colocar estes projetos numa empresa"
+  "officeAssignTooltip": "Colocar estes projetos numa empresa",
+  "officeDoneOpen": "✅ pronto — abrir",
+  "officeNeedsYou": "! precisa de você",
+  "officeThinking": "pensando…",
+  "officeUsing": "usando {name}",
+  "officeWorkflow": "workflow {name}",
+  "officeDelegating": "delegando: {what}"
 }

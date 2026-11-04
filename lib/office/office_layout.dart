@@ -1,5 +1,4 @@
 import 'dart:collection';
-import 'dart:math' as math;
 
 import 'office_model.dart';
 import 'office_sprites.dart' show OfficeFacing;
@@ -35,7 +34,7 @@ class Seat {
   final Tile tile;
   final OfficeFacing facing;
 
-  /// At a desk with a PC: those are taken first ([OfficeLayout.freeSeat]).
+  /// At a desk with a PC.
   final bool pc;
 }
 
@@ -134,20 +133,6 @@ class OfficeLayout {
     Seat((col: 6, row: 5), OfficeFacing.down),
   ];
 
-  /// Where each errand away from the desk is done, standing.
-  late final Map<OfficeActivity, List<Seat>> spots = {
-    OfficeActivity.reading: const [
-      Seat((col: 0, row: 1), OfficeFacing.up),
-      Seat((col: 1, row: 1), OfficeFacing.up),
-    ],
-    OfficeActivity.window: const [Seat((col: 3, row: 1), OfficeFacing.up)],
-    OfficeActivity.server: const [
-      Seat((col: 7, row: 3), OfficeFacing.right),
-      Seat((col: 7, row: 2), OfficeFacing.right),
-    ],
-    OfficeActivity.coffee: sofa,
-  };
-
   bool isWalkable(Tile at) =>
       at.col >= 0 &&
       at.col < cols &&
@@ -182,21 +167,12 @@ class OfficeLayout {
     return const [];
   }
 
-  /// A desk not [taken], those at a PC first, at random among those, as
-  /// officeState.findFreeSeat; null when all are.
-  Seat? freeSeat(Set<Tile> taken, [math.Random? random]) {
-    final free = desks.where((seat) => !taken.contains(seat.tile)).toList();
-    final pick = free.any((seat) => seat.pc)
-        ? free.where((seat) => seat.pc).toList()
-        : free;
-    if (pick.isEmpty) return null;
-    return pick[(random ?? _random).nextInt(pick.length)];
-  }
-
-  /// The first of [activity]'s spots not [taken]; null when there are none
-  /// free (or none for it: at the desk, then).
-  Seat? spotFor(OfficeActivity activity, Set<Tile> taken) =>
-      spots[activity]?.where((spot) => !taken.contains(spot.tile)).firstOrNull;
+  /// The desk of one whose [hash] is that ([OfficeAgent.hash]): the same
+  /// one each time, or the next not [taken] after it; null when all are.
+  Seat? deskFor(int hash, Set<Tile> taken) =>
+      [for (var i = 0; i < desks.length; i++) desks[(hash + i) % desks.length]]
+          .where((seat) => !taken.contains(seat.tile))
+          .firstOrNull;
 
   /// Beside [seat], for an intern: a floor tile next to it, not a seat,
   /// facing it.
@@ -215,6 +191,4 @@ class OfficeLayout {
             .firstOrNull ??
         seat;
   }
-
-  static final _random = math.Random();
 }

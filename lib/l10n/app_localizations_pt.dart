@@ -13806,4 +13806,28 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get officeAssignTooltip => 'Colocar estes projetos numa empresa';
+
+  @override
+  String get officeDoneOpen => '✅ pronto — abrir';
+
+  @override
+  String get officeNeedsYou => '! precisa de você';
+
+  @override
+  String get officeThinking => 'pensando…';
+
+  @override
+  String officeUsing(String name) {
+    return 'usando $name';
+  }
+
+  @override
+  String officeWorkflow(String name) {
+    return 'workflow $name';
+  }
+
+  @override
+  String officeDelegating(String what) {
+    return 'delegando: $what';
+  }
 }

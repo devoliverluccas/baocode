@@ -8700,5 +8700,26 @@
   "officeBack": "Up a level",
   "officeNoAgents": "No active agents — activate a conversation",
   "officeAssign": "assign",
-  "officeAssignTooltip": "Put these projects in a company"
+  "officeAssignTooltip": "Put these projects in a company",
+  "officeDoneOpen": "✅ done — open",
+  "officeNeedsYou": "! needs you",
+  "officeThinking": "thinking…",
+  "officeUsing": "using {name}",
+  "@officeUsing": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "officeWorkflow": "workflow {name}",
+  "@officeWorkflow": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "officeDelegating": "delegating: {what}",
+  "@officeDelegating": {
+    "placeholders": {
+      "what": {"type": "String"}
+    }
+  }
 }

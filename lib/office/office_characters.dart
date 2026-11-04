@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/painting.dart';
 
+import '../chat/chat_models.dart' show ChatItem;
 import '../workspace/workspace.dart';
 import 'office_layout.dart';
 import 'office_model.dart';
@@ -11,12 +12,15 @@ import 'office_sprites.dart';
 /// What a character does where it gets to.
 enum _Pose { sit, stand }
 
-/// A character of a room, as Pixel Agents' characters.ts: it walks a path
-/// tile by tile to where its [activity] is done, then sits or stands there
-/// at it. It comes in at the door and leaves by it.
+/// A character of a room, as Pixel Agents' characters.ts: it comes in at
+/// the door and walks a path tile by tile to its own desk, sits there at
+/// its PC whatever it does (stands by it, waving, to ask), and leaves by
+/// the door.
 class OfficeCharacter {
   OfficeCharacter._(this.agent, this.tile, {this.parent})
     : activity = agent.activity,
+      status = agent.status,
+      current = agent.source.current,
       position = _center(tile);
 
   /// Its conversation, as last synced; an intern's is its parent's.
@@ -27,6 +31,16 @@ class OfficeCharacter {
   OfficeCharacter? _intern;
 
   OfficeActivity activity;
+
+  /// Its conversation's status and what its turn runs, as last followed:
+  /// what its bubble says ([activityText]).
+  ThreadStatus status;
+  ChatItem? current;
+
+  /// Where its bubble was last drawn, in the room's pixels: a click on it
+  /// is one on the character. Null: none.
+  Rect? bubble;
+
   Tile tile;
   List<Tile> path = const [];
 
@@ -64,6 +78,7 @@ class OfficeCharacter {
       OfficeActivity.reading => 5 + two,
       OfficeActivity.typing ||
       OfficeActivity.server ||
+      OfficeActivity.window ||
       OfficeActivity.intern => 3 + two,
       // Arms up and down.
       OfficeActivity.waving => two == 0 ? 1 : 3,
@@ -143,13 +158,9 @@ class OfficeCharacter {
 
 /// A room's characters: one per agent synced ([sync]), and the interns.
 class RoomScene {
-  RoomScene({OfficeLayout? layout, this.random})
-    : layout = layout ?? OfficeLayout.room;
+  RoomScene({OfficeLayout? layout}) : layout = layout ?? OfficeLayout.room;
 
   final OfficeLayout layout;
-
-  /// Who sits where; tests make it up.
-  final math.Random? random;
 
   final _byKey = <Object, OfficeCharacter>{};
 
@@ -182,20 +193,22 @@ class RoomScene {
       character
         ..agent = agent
         ..activity = agent.activity
+        ..status = agent.status
+        ..current = agent.source.current
         ..leaving = false;
     }
     _place(still: still);
   }
 
-  /// Whoever's thread now runs another tool goes to it: the workspace tells
-  /// of a status changed, not of each tool a turn runs.
+  /// What each one's thread runs now: the workspace tells of a status
+  /// changed, not of each tool a turn runs.
   void _follow() {
     for (final character in _byKey.values) {
       if (character.agent.thread case final thread?) {
-        character.activity = activityOf(
-          thread.shownStatus,
-          runningTool(thread),
-        );
+        character
+          ..status = thread.shownStatus
+          ..current = runningItem(thread)
+          ..activity = activityOf(character.status, kindOf(character.current));
       }
     }
   }
@@ -206,32 +219,25 @@ class RoomScene {
       for (final c in characters)
         if (c.desk case final desk?) desk.tile,
     };
-    final taken = <Tile>{};
     for (final character in characters) {
       if (character.leaving) {
         _leave(character);
         continue;
       }
-      final desk = character.desk ??= layout.freeSeat(desks, random);
+      final desk = character.desk ??= layout.deskFor(
+        character.agent.hash,
+        desks,
+      );
       if (desk != null) desks.add(desk.tile);
-      final spot = layout.spotFor(character.activity, taken);
-      if (spot != null) taken.add(spot.tile);
-      switch (character.activity) {
-        case OfficeActivity.waving:
-          character._goTo(
-            layout,
-            desk == null ? null : Seat(desk.tile, OfficeFacing.down),
-            _Pose.stand,
-          );
-        case OfficeActivity.coffee when spot != null:
-          character._goTo(layout, spot, _Pose.sit);
-        case OfficeActivity.reading ||
-                OfficeActivity.window ||
-                OfficeActivity.server
-            when spot != null:
-          character._goTo(layout, spot, _Pose.stand);
-        case _:
-          character._goTo(layout, desk, _Pose.sit);
+      if (character.activity == OfficeActivity.waving) {
+        // Up from its chair, turned to the room.
+        character._goTo(
+          layout,
+          desk == null ? null : Seat(desk.tile, OfficeFacing.down),
+          _Pose.stand,
+        );
+      } else {
+        character._goTo(layout, desk, _Pose.sit);
       }
       _keepIntern(character);
     }
@@ -302,10 +308,15 @@ class RoomScene {
   static Offset origin(Offset topLeft) =>
       topLeft + const Offset(0, OfficeLayout.tile);
 
-  /// The character at [at], in the room's pixels; the front one first.
+  /// The character at [at], in the room's pixels, or whose bubble is
+  /// there; the front one first.
   OfficeCharacter? characterAt(Offset at) =>
       (characters..sort((a, b) => b.position.dy.compareTo(a.position.dy)))
-          .where((c) => !c.leaving && c.rect.contains(at))
+          .where(
+            (c) =>
+                !c.leaving &&
+                (c.rect.contains(at) || (c.bubble?.contains(at) ?? false)),
+          )
           .firstOrNull;
 
   /// Draws the room at [topLeft] ([RoomBox.rect]'s): its floor of the
@@ -431,45 +442,9 @@ class RoomScene {
       rect,
       frame: character.frame,
       facing: character.facing,
+      hue: character.isIntern ? 0 : character.agent.hue,
       badge: character.isIntern ? null : badge,
     );
-    if (character.walking || character.isIntern) return;
-    switch (character.activity) {
-      case OfficeActivity.waving:
-        _bubble(canvas, rect, const Color(0xffffcc00), const [
-          (3, 1, 1, 4),
-          (3, 6, 1, 1),
-        ]);
-      case OfficeActivity.done:
-        _bubble(canvas, rect, const Color(0xff34c759), const [
-          (1, 4, 1, 1),
-          (2, 5, 1, 1),
-          (3, 4, 1, 1),
-          (4, 3, 1, 1),
-          (5, 2, 1, 1),
-        ]);
-      case _:
-    }
-  }
-
-  /// A bubble of 7×8 of [color] over [rect]'s head, [marks] (x, y, w, h)
-  /// in white on it: the "!" of one waiting, the ✅ of one done.
-  static void _bubble(
-    Canvas canvas,
-    Rect rect,
-    Color color,
-    List<(int, int, int, int)> marks,
-  ) {
-    final box = Rect.fromLTWH(rect.left + 5, rect.top - 6, 7, 8);
-    canvas
-      ..drawRect(box.inflate(1), Paint()..color = const Color(0xff1c1c1e))
-      ..drawRect(box, Paint()..color = color);
-    for (final (x, y, w, h) in marks) {
-      canvas.drawRect(
-        Rect.fromLTWH(box.left + x, box.top + y, w.toDouble(), h.toDouble()),
-        Paint()..color = const Color(0xffffffff),
-      );
-    }
   }
 }
 
