@@ -13,6 +13,7 @@ import 'package:baocode/office/office_painter.dart';
 import 'package:baocode/office/office_sprites.dart';
 import 'package:baocode/workspace/companies.dart';
 import 'package:baocode/workspace/workspace.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -35,6 +36,13 @@ void main() {
       const dashboard = Project('dashboard', '/p/dashboard');
       const agentIa = Project('agent-ia', '/l/agent-ia');
       const loose = Project('notas', '/n');
+      const idle = [
+        Project('promobot', '/p/promobot'),
+        Project('conectazap', '/p/conectazap'),
+        Project('promov-central', '/p/promov-central'),
+        Project('hub-lunar', '/p/hub-lunar'),
+        Project('AI-Voice', '/p/ai-voice'),
+      ];
 
       OfficeThread thread(
         Project project,
@@ -115,7 +123,7 @@ void main() {
                 : p.path.startsWith('/l')
                 ? lutech
                 : null,
-            projects: const [sentinela, dashboard, agentIa, loose],
+            projects: const [sentinela, dashboard, agentIa, loose, ...idle],
             threads: threads(team, u),
             noCompany: 'Sem empresa',
           );
@@ -136,6 +144,8 @@ void main() {
       final office = campus([t2, t3], []);
       scenes.sync(office);
 
+      // A window of the app's, the sidebar open.
+      const space = Size(1500, 860);
       Future<void> paint(
         CampusGeometry geometry,
         int scale,
@@ -149,6 +159,7 @@ void main() {
           scale: scale,
           sprites: sprites,
           scenes: scenes,
+          font: const TextStyle(fontFamily: 'Segoe UI'),
           colors: (
             text: const Color(0xffffffff),
             muted: const Color(0xff8e8e93),
@@ -169,12 +180,40 @@ void main() {
         File('$out/$name').writeAsBytesSync(png!.buffer.asUint8List());
       }
 
-      await paint(CampusGeometry.of(office), 4, 'office_v3_level1.png');
+      Future<void> fit<T>(
+        CampusGeometry Function(T, double) make,
+        List<T> options,
+        int max,
+        String name,
+      ) async {
+        final fit = fitGeometry(make, options, space, max: max);
+        await paint(fit.geometry, fit.scale, name);
+      }
+
+      await fit(
+        (int columns, _) => CampusGeometry.of(office, columns: columns),
+        campusColumns,
+        5,
+        'office_v4_level1.png',
+      );
       final building = office.buildings.first;
-      await paint(
-        CampusGeometry.room(building, building.rooms.first),
-        7,
-        'office_v3_level3.png',
+      await fit(
+        ((int, int) o, unit) => CampusGeometry.building(
+          building,
+          columns: o.$1,
+          cardColumns: o.$2,
+          unit: unit,
+          counts: {idle.first: 3},
+        ),
+        buildingColumns(building),
+        8,
+        'office_v4_level2.png',
+      );
+      await fit(
+        (_, _) => CampusGeometry.room(building, building.rooms.first),
+        const [0],
+        8,
+        'office_v4_level3.png',
       );
       // The scene of the room painted: who is where.
       for (final c in scenes[sentinela]!.characters) {
@@ -208,7 +247,7 @@ void main() {
       }
       final image = await recorder.endRecording().toImage(1440, 612);
       final png = await image.toByteData(format: ui.ImageByteFormat.png);
-      File('$out/office_v3_sheets.png')
+      File('$out/office_v4_sheets.png')
           .writeAsBytesSync(png!.buffer.asUint8List());
     });
   });

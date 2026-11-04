@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -131,6 +134,7 @@ class OfficeViewState extends State<OfficeView> {
 
   /// One level up: from the room to its building, from there the campus.
   void up() => setState(() {
+    _fit();
     if (_room != null) {
       _room = null;
     } else {
@@ -142,6 +146,7 @@ class OfficeViewState extends State<OfficeView> {
   });
 
   void _go(String? building, [Project? room]) => setState(() {
+    _fit();
     _building = building;
     _room = room;
     _hovered = null;
@@ -228,12 +233,33 @@ class OfficeViewState extends State<OfficeView> {
     OfficeBuilding? building,
     OfficeRoom? room,
   ) {
-    final geometry = switch ((building, room)) {
-      (final building?, final room?) => CampusGeometry.room(building, room),
-      (final building?, null) => CampusGeometry.building(building),
-      _ => CampusGeometry.of(campus),
+    final counts = {
+      for (final project in building?.dim ?? const <Project>[])
+        project: _threadsOf(project).length,
     };
-    final level = _buildCanvas(geometry);
+    final level = switch ((building, room)) {
+      (final building?, final room?) => _buildCanvas<int>(
+        (_, _) => CampusGeometry.room(building, room),
+        const [0],
+        max: 8,
+      ),
+      (final building?, null) => _buildCanvas<(int, int)>(
+        (option, unit) => CampusGeometry.building(
+          building,
+          columns: option.$1,
+          cardColumns: option.$2,
+          unit: unit,
+          counts: counts,
+        ),
+        buildingColumns(building),
+        max: 8,
+      ),
+      _ => _buildCanvas<int>(
+        (columns, _) => CampusGeometry.of(campus, columns: columns),
+        campusColumns,
+        max: 5,
+      ),
+    };
     return AnimatedSwitcher(
       duration: MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
@@ -260,117 +286,185 @@ class OfficeViewState extends State<OfficeView> {
     );
   }
 
-  /// [geometry] at the largest whole scale of the screen's pixels that
-  /// fits (pixel art stays crisp at 125% as at 100%), scrolled where even 1
-  /// does not.
-  Widget _buildCanvas(CampusGeometry geometry) {
+  /// The user's zoom, in whole steps of the screen's pixels over the
+  /// scale that fits, and the canvas's offset in the view: what the wheel
+  /// and a drag change, a double click (or another level) puts back.
+  int _zoom = 0;
+  Offset _pan = Offset.zero;
+  DateTime? _tapped;
+
+  void _fit() {
+    _zoom = 0;
+    _pan = Offset.zero;
+  }
+
+  /// [pan] kept so the canvas of [content] does not leave [space]: within
+  /// it where it is smaller, covering it where larger.
+  static Offset _clamp(Offset pan, Size content, Size space) {
+    double axis(double at, double content, double space) {
+      final room = space - content;
+      return at.clamp(math.min(0.0, room), math.max(0.0, room));
+    }
+
+    return Offset(
+      axis(pan.dx, content.width, space.width),
+      axis(pan.dy, content.height, space.height),
+    );
+  }
+
+  /// The level [make] lays out, with the one of [options] that fits the
+  /// view at the largest whole scale of the screen's pixels ([fitGeometry]),
+  /// from the top left; then zoomed by the wheel (about the pointer) and
+  /// moved by a drag.
+  Widget _buildCanvas<T>(
+    CampusGeometry Function(T option, double unit) make,
+    List<T> options, {
+    required int max,
+  }) {
     final ratio = MediaQuery.devicePixelRatioOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final size = geometry.size;
-        var scale = ((zoomed ? 8 : 4) * ratio).floor();
-        while (scale > 1 &&
-            (size.width * scale / ratio > constraints.maxWidth ||
-                size.height * scale / ratio > constraints.maxHeight)) {
-          scale--;
-        }
-        // Logical pixels a sprite's pixel takes.
+        final space = constraints.biggest;
+        final fit = fitGeometry(
+          make,
+          options,
+          space,
+          max: (max * ratio).floor(),
+          pixelRatio: ratio,
+        );
+        // Down to 1, up to 4 times the fit's.
+        final most = math.max(fit.scale * 4, 8);
+        final scale = (fit.scale + _zoom).clamp(1, most);
         final unit = scale / ratio;
-        Offset at(Offset local) => local / unit;
-        // From the top left, not lost in the middle of the screen.
-        return Align(
-          alignment: Alignment.topLeft,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SingleChildScrollView(
-              child: SidebarMenu(
-                items: _agentItems,
-                builder: (context, menu) => MouseRegion(
-                  cursor: _hovered != null || _target != null
-                      ? SystemMouseCursors.click
-                      : MouseCursor.defer,
-                  onHover: (event) {
-                    final local = at(event.localPosition);
-                    final agent = _hit(geometry, local)?.$1;
-                    final target = agent == null
-                        ? _targetAt(geometry, local)
-                        : null;
-                    if (agent == null &&
-                        _hovered == null &&
-                        target == _target) {
-                      return;
-                    }
-                    setState(() {
-                      _hovered = agent;
-                      _hoverAt = event.localPosition;
-                      _target = target;
-                    });
-                  },
-                  onExit: (_) => setState(() {
-                    _hovered = null;
-                    _target = null;
-                  }),
-                  child: GestureDetector(
-                    onTapUp: (details) =>
-                        _tap(geometry, at(details.localPosition)),
-                    onSecondaryTapUp: (details) {
-                      final hit = _hit(geometry, at(details.localPosition));
-                      final thread = hit?.$1.thread;
-                      if (thread == null) return;
-                      setState(() {
-                        _menuFor = thread;
-                        _menuAt = hit!.$2;
-                      });
-                      menu.open(details.globalPosition);
-                    },
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        CustomPaint(
-                          size: size * unit,
-                          painter: CampusPainter(
-                            geometry: geometry,
-                            scale: scale,
-                            pixelRatio: ratio,
-                            sprites: _sprites,
-                            scenes: _scenes,
-                            l10n: context.l10n,
-                            repaint: _clock,
-                            colors: officeColors(),
-                            highlight: _target,
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: CampusSigns(
-                            geometry: geometry,
-                            unit: unit,
-                            workspace: widget.workspace,
-                          ),
-                        ),
-                        if (_hovered case final agent? when _renaming == null)
-                          Positioned(
-                            left: _hoverAt.dx + 12,
-                            top: _hoverAt.dy + 12,
-                            child: IgnorePointer(child: _buildHover(agent)),
-                          ),
-                        if (_renaming case (final thread, final rect))
-                          Positioned(
-                            left: rect.center.dx * unit - 100,
-                            top: rect.top * unit,
-                            width: 200,
-                            child: InlineRenameField(
-                              initial: thread.title,
-                              onDone: (title) {
-                                if (title != null) {
-                                  widget.workspace.rename(thread, title);
-                                }
-                                setState(() => _renaming = null);
-                                _focus.requestFocus();
-                              },
+        final geometry = scale == fit.scale
+            ? fit.geometry
+            : make(fit.option, unit);
+        final size = geometry.size;
+        final pan = _clamp(_pan, size * unit, space);
+        // Of the view to the canvas, in the sprites' pixels.
+        Offset at(Offset local) => (local - pan) / unit;
+        void zoomBy(int steps, Offset about) {
+          final next = (scale + steps).clamp(1, most);
+          if (next == scale) return;
+          final to = next / ratio;
+          final content = make(fit.option, to).size * to;
+          setState(() {
+            _zoom = next - fit.scale;
+            _pan = _clamp(about - (about - pan) * (to / unit), content, space);
+          });
+        }
+
+        return SidebarMenu(
+          items: _agentItems,
+          builder: (context, menu) => Listener(
+            onPointerSignal: (event) {
+              if (event is! PointerScrollEvent) return;
+              GestureBinding.instance.pointerSignalResolver.register(
+                event,
+                (event) => zoomBy(
+                  (event as PointerScrollEvent).scrollDelta.dy < 0 ? 1 : -1,
+                  event.localPosition,
+                ),
+              );
+            },
+            child: MouseRegion(
+              cursor: _hovered != null || _target != null
+                  ? SystemMouseCursors.click
+                  : MouseCursor.defer,
+              onHover: (event) {
+                final local = at(event.localPosition);
+                final agent = _hit(geometry, local)?.$1;
+                final target = agent == null
+                    ? _targetAt(geometry, local)
+                    : null;
+                if (agent == null && _hovered == null && target == _target) {
+                  return;
+                }
+                setState(() {
+                  _hovered = agent;
+                  _hoverAt = event.localPosition;
+                  _target = target;
+                });
+              },
+              onExit: (_) => setState(() {
+                _hovered = null;
+                _target = null;
+              }),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapUp: (details) => _tap(geometry, at(details.localPosition)),
+                onSecondaryTapUp: (details) {
+                  final hit = _hit(geometry, at(details.localPosition));
+                  final thread = hit?.$1.thread;
+                  if (thread == null) return;
+                  setState(() {
+                    _menuFor = thread;
+                    _menuAt = hit!.$2;
+                  });
+                  menu.open(details.globalPosition);
+                },
+                onPanUpdate: (details) => setState(
+                  () => _pan = _clamp(pan + details.delta, size * unit, space),
+                ),
+                child: ClipRect(
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: pan.dx,
+                        top: pan.dy,
+                        width: size.width * unit,
+                        height: size.height * unit,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            CustomPaint(
+                              size: size * unit,
+                              painter: CampusPainter(
+                                geometry: geometry,
+                                scale: scale,
+                                pixelRatio: ratio,
+                                sprites: _sprites,
+                                scenes: _scenes,
+                                l10n: context.l10n,
+                                repaint: _clock,
+                                colors: officeColors(),
+                                font: DefaultTextStyle.of(context).style,
+                                highlight: _target,
+                              ),
                             ),
-                          ),
-                      ],
-                    ),
+                            Positioned.fill(
+                              child: CampusSigns(
+                                geometry: geometry,
+                                unit: unit,
+                                workspace: widget.workspace,
+                              ),
+                            ),
+                            if (_renaming case (final thread, final rect))
+                              Positioned(
+                                left: rect.center.dx * unit - 100,
+                                top: rect.top * unit,
+                                width: 200,
+                                child: InlineRenameField(
+                                  initial: thread.title,
+                                  onDone: (title) {
+                                    if (title != null) {
+                                      widget.workspace.rename(thread, title);
+                                    }
+                                    setState(() => _renaming = null);
+                                    _focus.requestFocus();
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (_hovered case final agent? when _renaming == null)
+                        Positioned(
+                          left: _hoverAt.dx + 12,
+                          top: _hoverAt.dy + 12,
+                          child: IgnorePointer(child: _buildHover(agent)),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -392,8 +486,17 @@ class OfficeViewState extends State<OfficeView> {
   /// a room (from the campus or its building), else to the building.
   void _tap(CampusGeometry geometry, Offset at) {
     _focus.requestFocus();
+    final now = DateTime.now();
+    final twice =
+        _tapped != null && now.difference(_tapped!) < kDoubleTapTimeout;
+    _tapped = now;
     if (_hit(geometry, at)?.$1.thread case final thread?) {
       widget.onOpenAgent(thread);
+      return;
+    }
+    // A double click on nothing to go into: back as it fits.
+    if (twice && _targetAt(geometry, at) == null) {
+      setState(_fit);
       return;
     }
     if (_room != null) return;
@@ -462,16 +565,19 @@ class OfficeViewState extends State<OfficeView> {
   }
 
   /// Level 3's side: all the project's conversations, the inactive too.
+  /// [project]'s conversations the sidebar lists, the inactive too.
+  List<AgentThread> _threadsOf(Project project) => [
+    for (final thread in widget.workspace.threads)
+      if (thread.project == project &&
+          !thread.archived &&
+          !thread.untouched &&
+          widget.workspace.listsInSidebar(thread))
+        thread,
+  ];
+
   Widget _buildConversations(Project project) {
-    final workspace = widget.workspace;
-    final threads = [
-      for (final thread in workspace.threads)
-        if (thread.project == project &&
-            !thread.archived &&
-            !thread.untouched &&
-            workspace.listsInSidebar(thread))
-          thread,
-    ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final threads = _threadsOf(project)
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return Container(
       width: 220,
       decoration: BoxDecoration(
