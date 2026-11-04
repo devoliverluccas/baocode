@@ -13797,4 +13797,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get officeBack => 'Voltar um nível';
+
+  @override
+  String get officeNoAgents => 'Nenhum agente ativo — ative uma conversa';
+
+  @override
+  String get officeAssign => 'atribuir';
+
+  @override
+  String get officeAssignTooltip => 'Colocar estes projetos numa empresa';
 }

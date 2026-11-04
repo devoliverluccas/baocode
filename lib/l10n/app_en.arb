@@ -8697,5 +8697,8 @@
       "done": {"type": "int"}
     }
   },
-  "officeBack": "Up a level"
+  "officeBack": "Up a level",
+  "officeNoAgents": "No active agents — activate a conversation",
+  "officeAssign": "assign",
+  "officeAssignTooltip": "Put these projects in a company"
 }

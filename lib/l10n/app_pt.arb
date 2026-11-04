@@ -3724,5 +3724,8 @@
   "officeNoCompany": "Sem empresa",
   "officeEmpty": "Nenhum projeto para mostrar",
   "officeReception": "{working} trabalhando · {waiting} esperando você · {done} prontas",
-  "officeBack": "Voltar um nível"
+  "officeBack": "Voltar um nível",
+  "officeNoAgents": "Nenhum agente ativo — ative uma conversa",
+  "officeAssign": "atribuir",
+  "officeAssignTooltip": "Colocar estes projetos numa empresa"
 }

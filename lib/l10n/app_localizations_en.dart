@@ -13701,4 +13701,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get officeBack => 'Up a level';
+
+  @override
+  String get officeNoAgents => 'No active agents — activate a conversation';
+
+  @override
+  String get officeAssign => 'assign';
+
+  @override
+  String get officeAssignTooltip => 'Put these projects in a company';
 }

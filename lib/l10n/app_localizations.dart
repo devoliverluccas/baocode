@@ -22304,6 +22304,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Up a level'**
   String get officeBack;
+
+  /// No description provided for @officeNoAgents.
+  ///
+  /// In en, this message translates to:
+  /// **'No active agents — activate a conversation'**
+  String get officeNoAgents;
+
+  /// No description provided for @officeAssign.
+  ///
+  /// In en, this message translates to:
+  /// **'assign'**
+  String get officeAssign;
+
+  /// No description provided for @officeAssignTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Put these projects in a company'**
+  String get officeAssignTooltip;
 }
 
 class _AppLocalizationsDelegate

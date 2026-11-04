@@ -9,6 +9,7 @@ import '../sidebar/sidebar.dart' show SidebarIconButton;
 import '../sidebar/sidebar_menu.dart';
 import '../theme/app_theme.dart';
 import '../theme/codicons.dart';
+import '../theme/workbench_theme.dart' show themeColors;
 import '../workspace/companies.dart';
 import '../workspace/islands.dart';
 import '../workspace/title_bar_double_click.dart';
@@ -16,6 +17,7 @@ import '../workspace/workspace.dart';
 import 'office_characters.dart';
 import 'office_model.dart';
 import 'office_painter.dart';
+import 'office_signs.dart';
 import 'office_sprites.dart';
 
 /// The office, in place of the conversations as the stashes are: each
@@ -242,19 +244,23 @@ class OfficeViewState extends State<OfficeView> {
     );
   }
 
-  /// [geometry] at the largest whole scale that fits (pixel art stays
-  /// crisp), scrolled where even 1 does not.
+  /// [geometry] at the largest whole scale of the screen's pixels that
+  /// fits (pixel art stays crisp at 125% as at 100%), scrolled where even 1
+  /// does not.
   Widget _buildCanvas(CampusGeometry geometry) {
+    final ratio = MediaQuery.devicePixelRatioOf(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = geometry.size;
-        var scale = zoomed ? 8 : 4;
+        var scale = ((zoomed ? 8 : 4) * ratio).floor();
         while (scale > 1 &&
-            (size.width * scale > constraints.maxWidth ||
-                size.height * scale > constraints.maxHeight)) {
+            (size.width * scale / ratio > constraints.maxWidth ||
+                size.height * scale / ratio > constraints.maxHeight)) {
           scale--;
         }
-        Offset at(Offset local) => local / scale.toDouble();
+        // Logical pixels a sprite's pixel takes.
+        final unit = scale / ratio;
+        Offset at(Offset local) => local / unit;
         return Center(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -292,21 +298,22 @@ class OfficeViewState extends State<OfficeView> {
                       clipBehavior: Clip.none,
                       children: [
                         CustomPaint(
-                          size: size * scale.toDouble(),
+                          size: size * unit,
                           painter: CampusPainter(
                             geometry: geometry,
                             scale: scale,
+                            pixelRatio: ratio,
                             sprites: _sprites,
                             scenes: _scenes,
                             repaint: _clock,
-                            colors: (
-                              text: AppColors.text,
-                              muted: AppColors.textMuted,
-                              border: AppColors.partBorder,
-                              room: AppColors.hover,
-                              building: AppColors.surface,
-                              waiting: AppColors.caution,
-                            ),
+                            colors: officeColors(),
+                          ),
+                        ),
+                        Positioned.fill(
+                          child: CampusSigns(
+                            geometry: geometry,
+                            unit: unit,
+                            workspace: widget.workspace,
                           ),
                         ),
                         if (_hovered case final agent? when _renaming == null)
@@ -317,8 +324,8 @@ class OfficeViewState extends State<OfficeView> {
                           ),
                         if (_renaming case (final thread, final rect))
                           Positioned(
-                            left: rect.center.dx * scale - 100,
-                            top: rect.top * scale,
+                            left: rect.center.dx * unit - 100,
+                            top: rect.top * unit,
                             width: 200,
                             child: InlineRenameField(
                               initial: thread.title,
@@ -479,11 +486,14 @@ class OfficeViewState extends State<OfficeView> {
             border: Border(top: BorderSide(color: AppColors.partBorder)),
           ),
           child: Text(
-            context.l10n.officeReception(
-              campus.working,
-              campus.waiting,
-              campus.done,
-            ),
+            // Nobody in: how to bring someone, in place of the counts.
+            campus.agents.isEmpty
+                ? context.l10n.officeNoAgents
+                : context.l10n.officeReception(
+                    campus.working,
+                    campus.waiting,
+                    campus.done,
+                  ),
             style: TextStyle(
               color: campus.waiting > 0
                   ? AppColors.caution
@@ -561,4 +571,34 @@ class OfficeViewState extends State<OfficeView> {
       ),
     );
   }
+}
+
+/// The office's colors from the theme's: a night sky over dark ones, a day
+/// one over light ones, the ground grass in both.
+OfficeColors officeColors() {
+  final dark = themeColors.dark;
+  final under = AppColors.background;
+  return (
+    text: AppColors.text,
+    muted: AppColors.textMuted,
+    border: AppColors.partBorder,
+    room: AppColors.hover,
+    building: AppColors.surface,
+    waiting: AppColors.caution,
+    sky: Color.lerp(
+      under,
+      dark ? const Color(0xff0b1830) : const Color(0xffaed8f5),
+      0.5,
+    )!,
+    ground: Color.lerp(
+      under,
+      dark ? const Color(0xff1f3a1c) : const Color(0xff8cc56b),
+      0.6,
+    )!,
+    lit: Color.lerp(
+      AppColors.hover,
+      const Color(0xffffd54f),
+      dark ? 0.35 : 0.45,
+    )!,
+  );
 }

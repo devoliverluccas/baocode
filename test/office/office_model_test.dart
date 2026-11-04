@@ -81,6 +81,23 @@ void main() {
     expect(room.waiting, isTrue);
   });
 
+  test('nothing in the Ativas: no one in, every project dim', () {
+    final office = campus([thread(site, 'idle', status: ThreadStatus.idle)]);
+    expect(office.agents, isEmpty);
+    expect(office.buildings.expand((b) => b.rooms), isEmpty);
+    expect(office.buildings.expand((b) => b.dim), [crm, site, api, lone]);
+    expect((office.working, office.waiting, office.done), (0, 0, 0));
+  });
+
+  test("a hidden company's projects show nowhere, busy or not", () {
+    final office = campus([
+      thread(legacy, 'asks', status: ThreadStatus.needsInput),
+    ]);
+    expect(office.agents, isEmpty);
+    expect(office.buildings.expand((b) => b.dim), isNot(contains(legacy)));
+    expect(office.waiting, 0);
+  });
+
   test('the reception counts', () {
     final office = campus([
       thread(site, 'a'),
@@ -146,8 +163,12 @@ void main() {
         room: grey,
         building: grey,
         waiting: grey,
+        sky: grey,
+        ground: grey,
+        lit: grey,
       ),
-    ).paint(Canvas(recorder), geometry.size * 2);
+      pixelRatio: 1.25,
+    ).paint(Canvas(recorder), geometry.size * 2 / 1.25);
     recorder.endRecording().dispose();
   });
 }

@@ -12951,4 +12951,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get officeBack => '返回上一级';
+
+  @override
+  String get officeNoAgents => '没有活跃的代理——激活一个对话';
+
+  @override
+  String get officeAssign => '分配';
+
+  @override
+  String get officeAssignTooltip => '将这些项目放入公司';
 }

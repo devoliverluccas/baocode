@@ -64,6 +64,30 @@ String withPlace(Project project, String title) => switch (placeOf(project)) {
   null => title,
 };
 
+/// A menu's entries putting [path] in a company: an existing one, or a new
+/// one.
+List<IdeMenuEntry> assignMenu(BuildContext context, String path) {
+  final companies = Companies.instance;
+  return [
+    for (final company in companies.list)
+      IdeMenuAction(
+        company.name,
+        icon: companyIconOf(company),
+        onSelected: () => companies.assign(path, company.name),
+      ),
+    if (companies.list.isNotEmpty) const IdeMenuSeparator(),
+    IdeMenuAction(
+      context.l10n.companyNew,
+      icon: const Icon(Icons.add),
+      onSelected: () async {
+        if (!context.mounted) return;
+        final name = await editCompany(context);
+        if (name != null) companies.assign(path, name);
+      },
+    ),
+  ];
+}
+
 /// In place of where a project is when it is in no company: that it runs
 /// with the default Claude account, a click putting it in a company (an
 /// existing one, or a new one).
@@ -73,33 +97,9 @@ class NoCompanyNotice extends StatelessWidget {
   final String path;
   final TextStyle? style;
 
-  void _menu(BuildContext context, Rect anchor) {
-    final companies = Companies.instance;
-    unawaited(
-      showIdeMenu(
-        context,
-        anchor: anchor,
-        entries: [
-          for (final company in companies.list)
-            IdeMenuAction(
-              company.name,
-              icon: companyIconOf(company),
-              onSelected: () => companies.assign(path, company.name),
-            ),
-          if (companies.list.isNotEmpty) const IdeMenuSeparator(),
-          IdeMenuAction(
-            context.l10n.companyNew,
-            icon: const Icon(Icons.add),
-            onSelected: () async {
-              if (!context.mounted) return;
-              final name = await editCompany(context);
-              if (name != null) companies.assign(path, name);
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  void _menu(BuildContext context, Rect anchor) => unawaited(
+    showIdeMenu(context, anchor: anchor, entries: assignMenu(context, path)),
+  );
 
   @override
   Widget build(BuildContext context) {
