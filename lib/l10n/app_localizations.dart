@@ -22317,6 +22317,12 @@ abstract class AppLocalizations {
   /// **'assign'**
   String get officeAssign;
 
+  /// On a building's roof in the office: how many of its conversations worked today
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 conversation} other{{count} conversations}}'**
+  String officeScoreConversations(int count);
+
   /// No description provided for @officeAssignTooltip.
   ///
   /// In en, this message translates to:

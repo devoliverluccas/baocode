@@ -3681,6 +3681,7 @@
   "officeBack": "返回上一级",
   "officeNoAgents": "没有活跃的代理——激活一个对话",
   "officeAssign": "分配",
+  "officeScoreConversations": "{count, plural, other{{count} 个对话}}",
   "officeAssignTooltip": "将这些项目放入公司",
   "officeBackLabel": "返回",
   "officeFloor": "{name} 楼层",

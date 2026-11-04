@@ -13805,6 +13805,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get officeAssign => 'atribuir';
 
   @override
+  String officeScoreConversations(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count conversas',
+      one: '1 conversa',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get officeAssignTooltip => 'Colocar estes projetos numa empresa';
 
   @override

@@ -549,7 +549,8 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           ),
           settingsChanges: widget.settings?.files?.settings,
           l10n: () => context.l10n,
-          shown: _workspace.isShown,
+          // The office covers the chat: what it shows is not in view.
+          shown: (thread) => !_office && _workspace.isShown(thread),
           onOpen: (thread) => _windows != null
               ? _windows!.showAgent(thread)
               : _openNotifiedAgent(thread),

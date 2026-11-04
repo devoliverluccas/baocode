@@ -12959,6 +12959,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get officeAssign => '分配';
 
   @override
+  String officeScoreConversations(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个对话',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get officeAssignTooltip => '将这些项目放入公司';
 
   @override

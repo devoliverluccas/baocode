@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../workspace/company_dialog.dart' show assignMenu;
 import '../workspace/workspace.dart';
 import 'office_painter.dart';
+import 'office_scoreboard.dart';
 
 /// What the canvas cannot paint, laid over it where [geometry] puts it at
 /// [unit] logical pixels a sprite's pixel: each room's project icon, and
@@ -19,11 +20,16 @@ class CampusSigns extends StatelessWidget {
     required this.geometry,
     required this.unit,
     required this.workspace,
+    this.scores = const {},
   });
 
   final CampusGeometry geometry;
   final double unit;
   final Workspace workspace;
+
+  /// Each building's day so far, by its company's name ('' for none's):
+  /// over its roof.
+  final Map<String, OfficeScore> scores;
 
   /// A room sign's icon, in sprite pixels: as tall as its name's line.
   static const iconSide = 7.0;
@@ -32,6 +38,28 @@ class CampusSigns extends StatelessWidget {
   Widget build(BuildContext context) => Stack(
     children: [
       for (final building in geometry.buildings) ...[
+        if (scores[building.building.company?.name ?? ''] case final score?)
+          Positioned(
+            left: building.sign.left * unit,
+            width: building.sign.width * unit,
+            top: (building.sign.top - CampusGeometry.gap) * unit,
+            height: CampusGeometry.gap * unit,
+            child: IgnorePointer(
+              child: Align(
+                alignment: Alignment.bottomRight,
+                child: Text(
+                  score.label(context.l10n),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    height: 1.2,
+                  ),
+                ),
+              ),
+            ),
+          ),
         for (final room in building.rooms)
           if (workspace.iconOf(room.room.project) case final icon?)
             Positioned(

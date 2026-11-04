@@ -10,6 +10,8 @@ import '../sidebar/sidebar_menu.dart';
 import '../theme/app_theme.dart';
 import '../theme/codicons.dart';
 import '../theme/workbench_theme.dart' show themeColors;
+import '../usage/usage_ledger.dart';
+import '../usage/usage_record.dart';
 import '../workspace/companies.dart';
 import '../workspace/islands.dart';
 import '../workspace/title_bar_double_click.dart';
@@ -17,6 +19,7 @@ import '../workspace/workspace.dart';
 import 'office_characters.dart';
 import 'office_model.dart';
 import 'office_painter.dart';
+import 'office_scoreboard.dart';
 import 'office_signs.dart';
 import 'office_sprites.dart';
 
@@ -89,6 +92,31 @@ class OfficeViewState extends State<OfficeView> {
   Duration _ticked = Duration.zero;
   bool _still = false;
 
+  /// Each building's day so far, on its roof.
+  late final _scores = OfficeScores(
+    UsageLedger.current,
+    _buildingOf,
+    also: Companies.instance,
+  );
+
+  /// The company of [call]'s conversation's project ('' for none); null
+  /// for a project not the sidebar's.
+  String? _buildingOf(UsageCall call) {
+    final workspace = widget.workspace;
+    final project =
+        workspace.threads
+            .where(
+              (thread) => call.session != null && thread.id == call.session,
+            )
+            .firstOrNull
+            ?.project ??
+        workspace.sidebarProjectsHere
+            .where((project) => project.name == call.project)
+            .firstOrNull;
+    if (project == null) return null;
+    return Companies.instance.of(project.path)?.name ?? '';
+  }
+
   void _tick() {
     final now = _clock.time;
     // A late or first tick: no leap across the room.
@@ -124,6 +152,7 @@ class OfficeViewState extends State<OfficeView> {
 
   @override
   void dispose() {
+    _scores.dispose();
     _clock.dispose();
     _focus.dispose();
     super.dispose();
@@ -153,7 +182,11 @@ class OfficeViewState extends State<OfficeView> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return ListenableBuilder(
-      listenable: Listenable.merge([widget.workspace, Companies.instance]),
+      listenable: Listenable.merge([
+        widget.workspace,
+        Companies.instance,
+        _scores,
+      ]),
       builder: (context, _) {
         final campus = campusOf(
           widget.workspace,
@@ -345,6 +378,7 @@ class OfficeViewState extends State<OfficeView> {
                             geometry: geometry,
                             unit: unit,
                             workspace: widget.workspace,
+                            scores: _scores.value,
                           ),
                         ),
                         if (_hovered case final agent? when _renaming == null)
