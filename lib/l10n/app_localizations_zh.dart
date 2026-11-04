@@ -12985,4 +12985,28 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get officeNextFloor => '下一层';
+
+  @override
+  String get officeDoneOpen => '✅ 完成 — 打开';
+
+  @override
+  String get officeNeedsYou => '! 需要你';
+
+  @override
+  String get officeThinking => '思考中…';
+
+  @override
+  String officeUsing(String name) {
+    return '使用 $name';
+  }
+
+  @override
+  String officeWorkflow(String name) {
+    return '工作流 $name';
+  }
+
+  @override
+  String officeDelegating(String what) {
+    return '委派：$what';
+  }
 }

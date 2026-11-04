@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/office/office_characters.dart';
 import 'package:baocode/office/office_layout.dart';
@@ -17,7 +15,16 @@ void main() {
     ThreadStatus status = ThreadStatus.running,
     ToolKind? tool,
   }) => OfficeAgent(
-    OfficeThread(project: site, title: title, status: status, tool: tool),
+    OfficeThread(
+      project: site,
+      title: title,
+      status: status,
+      current: tool == null
+          ? null
+          : tool == ToolKind.agent
+          ? const AgentItem(description: 'sub')
+          : ToolCallItem(kind: tool, target: 'x', status: ToolStatus.running),
+    ),
   );
 
   /// [seconds] of the scene going on, in frames of a 30th.
@@ -42,17 +49,14 @@ void main() {
     expect(layout.findPath(layout.door, layout.door), isEmpty);
   });
 
-  test('a free desk at a PC, none when all are taken', () {
-    final taken = {for (final seat in layout.desks.skip(1)) seat.tile};
-    expect(
-      layout.freeSeat(taken, math.Random(1))?.tile,
-      layout.desks.first.tile,
-    );
-    expect(layout.freeSeat({...taken, layout.desks.first.tile}), isNull);
+  test('the same desk for the same one, the next free if taken', () {
+    expect(layout.deskFor(5, {}), layout.desks[1]);
+    expect(layout.deskFor(5, {layout.desks[1].tile}), layout.desks[2]);
+    expect(layout.deskFor(0, {for (final d in layout.desks) d.tile}), isNull);
   });
 
-  test('in by the door, to the desk, about the room by status, out', () {
-    final scene = RoomScene(random: math.Random(1));
+  test('in by the door, sat at its PC whatever it does, out', () {
+    final scene = RoomScene();
     scene.sync([agent('a')]);
     final character = scene.characters.single;
     expect(character.tile, layout.door);
@@ -71,18 +75,23 @@ void main() {
     expect(character.tile, character.desk!.tile);
     expect(character.facing, OfficeFacing.down);
 
+    for (final tool in [ToolKind.grep, ToolKind.command, ToolKind.web]) {
+      scene.sync([agent('a', tool: tool)]);
+      run(scene);
+      expect(character.tile, character.desk!.tile);
+      expect(character.sitting, isTrue);
+      expect(character.facing, OfficeFacing.up);
+    }
     scene.sync([agent('a', tool: ToolKind.grep)]);
-    run(scene);
-    expect(layout.spots[OfficeActivity.reading]!.map((s) => s.tile), [
-      character.tile,
-      isNot(character.tile),
-    ]);
     expect(character.frame, inInclusiveRange(5, 6));
 
-    scene.sync([agent('a', status: ThreadStatus.idle)]);
-    run(scene);
-    expect(layout.sofa.map((s) => s.tile), contains(character.tile));
-    expect(character.sitting, isTrue);
+    for (final status in [ThreadStatus.idle, ThreadStatus.unread]) {
+      scene.sync([agent('a', status: status)]);
+      run(scene);
+      expect(character.tile, character.desk!.tile);
+      expect(character.sitting, isTrue);
+    }
+    expect(character.status, ThreadStatus.unread);
 
     scene.sync([]);
     expect(character.leaving, isTrue);
@@ -91,7 +100,7 @@ void main() {
   });
 
   test('an intern beside its boss while a subagent runs', () {
-    final scene = RoomScene(random: math.Random(1));
+    final scene = RoomScene();
     scene.sync([agent('a', tool: ToolKind.agent)]);
     run(scene);
     final [boss, intern] = scene.characters;
@@ -106,7 +115,7 @@ void main() {
   });
 
   test('each to its own desk; motion turned down, there at once', () {
-    final scene = RoomScene(random: math.Random(2));
+    final scene = RoomScene();
     scene.sync([agent('a'), agent('b'), agent('c')], still: true);
     final characters = scene.characters;
     expect(characters.map((c) => c.walking), everyElement(isFalse));

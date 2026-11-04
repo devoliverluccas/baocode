@@ -3688,5 +3688,11 @@
   "officePrevRoom": "上一个房间",
   "officeNextRoom": "下一个房间",
   "officePrevFloor": "上一层",
-  "officeNextFloor": "下一层"
+  "officeNextFloor": "下一层",
+  "officeDoneOpen": "✅ 完成 — 打开",
+  "officeNeedsYou": "! 需要你",
+  "officeThinking": "思考中…",
+  "officeUsing": "使用 {name}",
+  "officeWorkflow": "工作流 {name}",
+  "officeDelegating": "委派：{what}"
 }

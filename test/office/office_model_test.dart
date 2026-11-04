@@ -1,4 +1,5 @@
 import 'package:baocode/chat/chat_models.dart';
+import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/office/office_characters.dart';
 import 'package:baocode/office/office_model.dart';
 import 'package:baocode/office/office_painter.dart';
@@ -25,13 +26,13 @@ void main() {
     String title, {
     ThreadStatus status = ThreadStatus.running,
     bool active = false,
-    ToolKind? tool,
+    ChatItem? current,
   }) => OfficeThread(
     project: project,
     title: title,
     status: status,
     active: active,
-    tool: tool,
+    current: current,
   );
 
   OfficeCampus campus(List<OfficeThread> threads) => buildCampus(
@@ -141,6 +142,54 @@ void main() {
     expect(activityOf(ThreadStatus.running, null), OfficeActivity.typing);
     expect(activityOf(ThreadStatus.unread, null), OfficeActivity.done);
     expect(activityOf(ThreadStatus.idle, null), OfficeActivity.coffee);
+  });
+
+  test('a bubble says what the turn runs, short', () {
+    final l10n = englishLocalizations;
+    String? say(ThreadStatus status, [ChatItem? current]) =>
+        activityText(status, current, l10n);
+    ToolCallItem call(ToolKind kind, String target, {String? label}) =>
+        ToolCallItem(
+          kind: kind,
+          target: target,
+          label: label,
+          status: ToolStatus.running,
+        );
+    expect(say(ThreadStatus.idle), isNull);
+    expect(say(ThreadStatus.needsInput), l10n.officeNeedsYou);
+    expect(say(ThreadStatus.unread), l10n.officeDoneOpen);
+    expect(say(ThreadStatus.running), l10n.officeThinking);
+    expect(
+      say(ThreadStatus.running, call(ToolKind.read, 'lib/workspace.dart')),
+      '${l10n.toolReading.toLowerCase()} workspace.dart',
+    );
+    expect(
+      say(ThreadStatus.running, call(ToolKind.other, 'x', label: 'Workflow')),
+      l10n.officeWorkflow('x'),
+    );
+    expect(
+      say(
+        ThreadStatus.running,
+        const AgentItem(id: 'a', description: 'review'),
+      ),
+      l10n.officeDelegating('review'),
+    );
+    final long = say(ThreadStatus.running, call(ToolKind.command, 'x' * 60))!;
+    expect(long, hasLength(28));
+    expect(long, endsWith('…'));
+  });
+
+  test('a look and a desk of its own, the same for the same one', () {
+    final a = OfficeAgent(thread(site, 'a'));
+    expect(OfficeAgent(thread(api, 'a')).hash, a.hash);
+    final looks = {
+      for (var i = 0; i < 40; i++)
+        (
+          OfficeAgent(thread(site, 'agent $i')).sprite,
+          OfficeAgent(thread(site, 'agent $i')).hue,
+        ),
+    };
+    expect(looks.length, greaterThan(20));
   });
 
   test('the campus paints, its characters where taps find them', () {

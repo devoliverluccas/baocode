@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../chat/chat_models.dart' show ChatItem;
+import '../l10n/l10n.dart';
 import '../workspace/company_dialog.dart' show companyIcons;
 import '../workspace/workspace.dart' show ThreadStatus;
 import 'office_characters.dart';
@@ -244,8 +246,12 @@ class CampusPainter extends CustomPainter {
     this.sprites,
     this.scenes,
     this.highlight,
+    this.l10n,
     super.repaint,
   });
+
+  /// What the bubbles say in; English when null.
+  final AppLocalizations? l10n;
 
   final CampusGeometry geometry;
 
@@ -448,14 +454,24 @@ class CampusPainter extends CustomPainter {
         size: 6,
         color: const Color(0xffffffff),
       );
-      if (geometry.labeled) {
-        final origin = RoomScene.origin(box.rect.topLeft);
-        for (final character in scene.characters) {
-          if (character.isIntern || character.leaving) continue;
-          _title(canvas, character.agent, character.rect.shift(origin));
-        }
+      final origin = RoomScene.origin(box.rect.topLeft);
+      for (final character in scene.characters) {
+        character.bubble = null;
+        if (character.isIntern || character.leaving) continue;
+        final rect = character.rect.shift(origin);
+        if (geometry.labeled) _title(canvas, character.agent, rect);
+        if (character.walking) continue;
+        character.bubble = _bubble(
+          canvas,
+          rect,
+          box.rect,
+          character.status,
+          character.current,
+          // Every other desk's a line higher: side by side, clear.
+          raised: character.tile.col ~/ 2 % 2 == 1,
+        )?.shift(-origin);
       }
-      _paintStill(canvas, box.beyond, sprites);
+      _paintStill(canvas, box.beyond, box.rect, sprites);
       _paintMore(canvas, box);
       return;
     }
@@ -463,28 +479,119 @@ class CampusPainter extends CustomPainter {
       ..drawRect(box.rect, Paint()..color = roomColor(box.room))
       ..drawRect(box.rect, _stroke(colors.border));
     _text(canvas, box.room.project.name, label, size: 6, color: colors.text);
-    _paintStill(canvas, box.agents, sprites);
+    _paintStill(canvas, box.agents, box.rect, sprites);
     _paintMore(canvas, box);
   }
 
-  /// [agents] standing where they are: boxes while the sprites load.
+  /// [agents] standing where they are in [room]: boxes while the sprites
+  /// load.
   void _paintStill(
     Canvas canvas,
     Iterable<(OfficeAgent, Rect)> agents,
+    Rect room,
     OfficeSprites? sprites,
   ) {
-    for (final (agent, rect) in agents) {
+    for (final (i, (agent, rect)) in agents.indexed) {
       switch (sprites) {
         case final sprites?:
-          sprites.drawCharacter(canvas, agent.sprite, rect);
+          sprites.drawCharacter(canvas, agent.sprite, rect, hue: agent.hue);
         case null:
           canvas.drawRect(rect.deflate(3), Paint()..color = colors.muted);
       }
-      if (agent.activity == OfficeActivity.waving) {
-        _text(canvas, '❗', rect.translate(4, -6), size: 7);
-      }
       if (geometry.labeled) _title(canvas, agent, rect);
+      _bubble(
+        canvas,
+        rect,
+        room,
+        agent.status,
+        agent.source.current,
+        raised: i.isOdd,
+      );
     }
+  }
+
+  /// The bubble over the head of one at [rect], kept in [room], for its
+  /// [status] and what its turn runs ([current]): on the campus a pixel
+  /// icon (the "!" of one waiting, the ✅ of one done, dots at work), closer
+  /// in a line saying it ([activityText]); [raised], a line higher. Where
+  /// it is drawn; null, none (one idle).
+  Rect? _bubble(
+    Canvas canvas,
+    Rect rect,
+    Rect room,
+    ThreadStatus status,
+    ChatItem? current, {
+    bool raised = false,
+  }) {
+    if (status == ThreadStatus.idle) return null;
+    const dark = Color(0xff1c1c1e);
+    final (fill, ink) = switch (status) {
+      ThreadStatus.needsInput => (const Color(0xffffcc00), dark),
+      ThreadStatus.unread => (const Color(0xff34c759), const Color(0xffffffff)),
+      _ => (const Color(0xfff5f5f5), dark),
+    };
+    if (!geometry.labeled) {
+      final box = Rect.fromLTWH(rect.left + 5, rect.top - 6, 7, 8);
+      final marks = switch (status) {
+        ThreadStatus.needsInput => const [(3, 1, 1, 4), (3, 6, 1, 1)],
+        ThreadStatus.unread => const [
+          (1, 4, 1, 1),
+          (2, 5, 1, 1),
+          (3, 4, 1, 1),
+          (4, 3, 1, 1),
+          (5, 2, 1, 1),
+        ],
+        // At work: dots, one more each step.
+        _ => [
+          for (var i = 0; i <= (scenes?.tick ?? 2) % 3; i++)
+            (1 + i * 2, 5, 1, 1),
+        ],
+      };
+      canvas
+        ..drawRect(box.inflate(1), Paint()..color = dark)
+        ..drawRect(box, Paint()..color = fill);
+      for (final (x, y, w, h) in marks) {
+        canvas.drawRect(
+          Rect.fromLTWH(box.left + x, box.top + y, w.toDouble(), h.toDouble()),
+          Paint()..color = ink,
+        );
+      }
+      return box;
+    }
+    final text = activityText(status, current, l10n ?? englishLocalizations);
+    if (text == null) return null;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(color: ink, fontSize: 4, height: 1),
+      ),
+      maxLines: 1,
+      ellipsis: '…',
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: 44);
+    const height = 6.0;
+    final width = (painter.width + 4).ceilToDouble();
+    // Over the title, a pixel's tail down to it.
+    final bottom = rect.top - 7 - (raised ? height + 2 : 0);
+    final left = (rect.center.dx - width / 2)
+        .clamp(room.left + 1, room.right - width - 1)
+        .roundToDouble();
+    final box = Rect.fromLTWH(left, bottom - height, width, height);
+    final tail = rect.center.dx.floorToDouble();
+    canvas
+      ..drawRect(box.inflate(1), Paint()..color = dark)
+      ..drawRect(box, Paint()..color = fill)
+      ..drawRect(
+        Rect.fromLTRB(tail, box.bottom + 1, tail + 1, rect.top - 6),
+        Paint()..color = dark,
+      );
+    painter
+      ..paint(
+        canvas,
+        Offset(box.left + 2, box.top + (height - painter.height) / 2),
+      )
+      ..dispose();
+    return box;
   }
 
   /// [agent]'s title over its character at [rect] (levels 2 and 3).
@@ -618,5 +725,6 @@ class CampusPainter extends CustomPainter {
       old.colors != colors ||
       old.sprites != sprites ||
       old.scenes != scenes ||
-      old.highlight != highlight;
+      old.highlight != highlight ||
+      old.l10n != l10n;
 }

@@ -8717,5 +8717,26 @@
   "officePrevRoom": "Previous room",
   "officeNextRoom": "Next room",
   "officePrevFloor": "Previous floor",
-  "officeNextFloor": "Next floor"
+  "officeNextFloor": "Next floor",
+  "officeDoneOpen": "✅ done — open",
+  "officeNeedsYou": "! needs you",
+  "officeThinking": "thinking…",
+  "officeUsing": "using {name}",
+  "@officeUsing": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "officeWorkflow": "workflow {name}",
+  "@officeWorkflow": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "officeDelegating": "delegating: {what}",
+  "@officeDelegating": {
+    "placeholders": {
+      "what": {"type": "String"}
+    }
+  }
 }

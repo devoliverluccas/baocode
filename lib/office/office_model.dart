@@ -1,4 +1,6 @@
 import '../chat/chat_models.dart';
+import '../chat/widgets/tool_call_row.dart' show toolVerb;
+import '../l10n/l10n.dart';
 import '../workspace/companies.dart';
 import '../workspace/workspace.dart';
 
@@ -26,9 +28,57 @@ enum OfficeActivity {
   /// Finished, unseen: a ✅ bubble.
   done,
 
-  /// Active but idle: coffee on the sofa.
+  /// Active but idle: sat at its desk, still.
   coffee,
 }
+
+/// The tool kind [current] runs, as [activityOf] reads it.
+ToolKind? kindOf(ChatItem? current) => switch (current) {
+  ToolCallItem(:final kind) => kind,
+  AgentItem() => ToolKind.agent,
+  _ => null,
+};
+
+/// The short line of a character's bubble, for its [status] and what its
+/// turn runs now ([current], see [runningItem]); null: no bubble.
+String? activityText(
+  ThreadStatus status,
+  ChatItem? current,
+  AppLocalizations l10n, {
+  int max = 28,
+}) => switch (status) {
+  ThreadStatus.needsInput => l10n.officeNeedsYou,
+  ThreadStatus.unread => l10n.officeDoneOpen,
+  ThreadStatus.idle => null,
+  ThreadStatus.running => _clip(switch (current) {
+    // The Workflow tool, a skill, anything else: by what it names. Their
+    // labels are English, made by the translator.
+    ToolCallItem(kind: ToolKind.other, :final label, :final target) =>
+      switch (label) {
+        'Workflow' => l10n.officeWorkflow(_base(target)),
+        'Using skill' => l10n.officeUsing('skill $target'),
+        _ => l10n.officeUsing(_base(target.isEmpty ? label ?? '' : target)),
+      },
+    ToolCallItem(:final kind, :final target, :final status) => [
+      toolVerb(kind, status: status, l10n: l10n).toLowerCase(),
+      if (target.isNotEmpty) _base(target),
+    ].join(' '),
+    AgentItem(:final description) => l10n.officeDelegating(description),
+    _ => l10n.officeThinking,
+  }, max),
+};
+
+/// A path's last part; anything else as it is.
+String _base(String target) {
+  final text = target.trim();
+  if (text.contains(' ') || text.contains('://')) return text;
+  return text
+      .split(RegExp(r'[/\\]'))
+      .lastWhere((part) => part.isNotEmpty, orElse: () => text);
+}
+
+String _clip(String text, int max) =>
+    text.length <= max ? text : '${text.substring(0, max - 1)}…';
 
 OfficeActivity activityOf(ThreadStatus status, ToolKind? tool) =>
     switch (status) {
@@ -54,7 +104,7 @@ class OfficeThread {
     required this.title,
     required this.status,
     this.active = false,
-    this.tool,
+    this.current,
     this.thread,
   });
 
@@ -65,8 +115,9 @@ class OfficeThread {
   final ThreadStatus status;
   final bool active;
 
-  /// The tool its turn runs now, if any.
-  final ToolKind? tool;
+  /// What its turn runs now ([runningItem]): a [ToolCallItem], an
+  /// [AgentItem] or the [LiveStatusItem] of one thinking; null if none.
+  final ChatItem? current;
 
   /// The conversation, to open and act on; null only in tests.
   final AgentThread? thread;
@@ -78,14 +129,20 @@ class OfficeThread {
 /// A character: one conversation in the Ativas.
 class OfficeAgent {
   OfficeAgent(this.source)
-    : activity = activityOf(source.status, source.tool),
-      sprite = _spriteOf(source.title);
+    : activity = activityOf(source.status, kindOf(source.current)),
+      hash = hashOf(source.thread?.id ?? source.title);
 
   final OfficeThread source;
   final OfficeActivity activity;
 
-  /// Which character sheet it wears, the same for the same title.
-  final int sprite;
+  /// Its conversation's, from run to run: what it looks like, its desk.
+  final int hash;
+
+  /// As Pixel Agents' palettes and hue shifts: which character sheet it
+  /// wears ([sprite]), then one of 8 turns of its colors ([hue], in
+  /// degrees; none first). The same for the same conversation.
+  int get sprite => hash % sprites;
+  double get hue => hash ~/ sprites % 8 * 45.0;
 
   AgentThread? get thread => source.thread;
   String get title => source.title;
@@ -94,10 +151,9 @@ class OfficeAgent {
   /// How many character sheets there are (assets/office/characters).
   static const sprites = 6;
 
-  // Not String.hashCode: the same character from run to run.
-  static int _spriteOf(String title) =>
-      title.codeUnits.fold(0, (sum, unit) => (sum * 31 + unit) & 0xffff) %
-      sprites;
+  // Not String.hashCode: the same from run to run.
+  static int hashOf(String key) =>
+      key.codeUnits.fold(0, (sum, unit) => (sum * 31 + unit) & 0xfffffff);
 }
 
 /// A project with conversations in the Ativas.
@@ -237,29 +293,32 @@ OfficeCampus campusOf(
           title: thread.title,
           status: thread.shownStatus,
           active: thread.active,
-          tool: runningTool(thread),
+          current: runningItem(thread),
           thread: thread,
         ),
     ],
   );
 }
 
-/// The tool [thread]'s turn runs now: its last call still running, a
-/// subagent's as [ToolKind.agent]. Not read from a session not open, which
-/// would open it.
-ToolKind? runningTool(AgentThread thread) {
+/// What [thread]'s turn runs now: its last call still running, or the
+/// subagent running; else, while it streams, its [LiveStatusItem]. Not read
+/// from a session not open, which would open it.
+ChatItem? runningItem(AgentThread thread) {
   if (!thread.isOpen) return null;
   final session = thread.session;
+  LiveStatusItem? live;
   for (var i = session.itemCount - 1; i >= 0; i--) {
     switch (session.itemAt(i)) {
       case UserMessageItem():
-        return null;
-      case ToolCallItem(:final kind, status: ToolStatus.running):
-        return kind;
-      case AgentItem(status: CommandStatus.running):
-        return ToolKind.agent;
+        return live;
+      case final ToolCallItem item when item.status == ToolStatus.running:
+        return item;
+      case final AgentItem item when item.status == CommandStatus.running:
+        return item;
+      case final LiveStatusItem item:
+        live = item;
       default:
     }
   }
-  return null;
+  return live;
 }

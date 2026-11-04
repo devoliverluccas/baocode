@@ -334,6 +334,7 @@ class OfficeViewState extends State<OfficeView> {
                             pixelRatio: ratio,
                             sprites: _sprites,
                             scenes: _scenes,
+                            l10n: context.l10n,
                             repaint: _clock,
                             colors: officeColors(),
                             highlight: _target,

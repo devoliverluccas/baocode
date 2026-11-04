@@ -13735,4 +13735,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get officeNextFloor => 'Next floor';
+
+  @override
+  String get officeDoneOpen => '✅ done — open';
+
+  @override
+  String get officeNeedsYou => '! needs you';
+
+  @override
+  String get officeThinking => 'thinking…';
+
+  @override
+  String officeUsing(String name) {
+    return 'using $name';
+  }
+
+  @override
+  String officeWorkflow(String name) {
+    return 'workflow $name';
+  }
+
+  @override
+  String officeDelegating(String what) {
+    return 'delegating: $what';
+  }
 }

@@ -3734,5 +3734,11 @@
   "officePrevRoom": "Sala anterior",
   "officeNextRoom": "Próxima sala",
   "officePrevFloor": "Andar anterior",
-  "officeNextFloor": "Próximo andar"
+  "officeNextFloor": "Próximo andar",
+  "officeDoneOpen": "✅ pronto — abrir",
+  "officeNeedsYou": "! precisa de você",
+  "officeThinking": "pensando…",
+  "officeUsing": "usando {name}",
+  "officeWorkflow": "workflow {name}",
+  "officeDelegating": "delegando: {what}"
 }

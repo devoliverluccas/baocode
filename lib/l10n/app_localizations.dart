@@ -22364,6 +22364,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Next floor'**
   String get officeNextFloor;
+
+  /// No description provided for @officeDoneOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'✅ done — open'**
+  String get officeDoneOpen;
+
+  /// No description provided for @officeNeedsYou.
+  ///
+  /// In en, this message translates to:
+  /// **'! needs you'**
+  String get officeNeedsYou;
+
+  /// No description provided for @officeThinking.
+  ///
+  /// In en, this message translates to:
+  /// **'thinking…'**
+  String get officeThinking;
+
+  /// No description provided for @officeUsing.
+  ///
+  /// In en, this message translates to:
+  /// **'using {name}'**
+  String officeUsing(String name);
+
+  /// No description provided for @officeWorkflow.
+  ///
+  /// In en, this message translates to:
+  /// **'workflow {name}'**
+  String officeWorkflow(String name);
+
+  /// No description provided for @officeDelegating.
+  ///
+  /// In en, this message translates to:
+  /// **'delegating: {what}'**
+  String officeDelegating(String what);
 }
 
 class _AppLocalizationsDelegate
