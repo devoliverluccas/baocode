@@ -8707,6 +8707,9 @@
       "count": {"type": "int"}
     }
   },
+  "officeMiniShow": "Show the mini office in the chat",
+  "officeMiniHide": "Hide the mini office",
+  "officeMiniOpen": "Open the office",
   "officeAssignTooltip": "Put these projects in a company",
   "officeBackLabel": "Back",
   "officeFloor": "Floor {name}",

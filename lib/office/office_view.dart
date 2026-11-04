@@ -40,9 +40,14 @@ class OfficeView extends StatefulWidget {
     this.leading,
     this.titleBarInset = 12,
     this.island,
+    this.scenes,
   });
 
   final Workspace workspace;
+
+  /// The characters, kept while it is closed (the workbench's): opened
+  /// again, who was in is where it was. Null: its own, anew each time.
+  final OfficeScenes? scenes;
 
   /// A character was clicked: its conversation opens.
   final ValueChanged<AgentThread> onOpenAgent;
@@ -89,7 +94,7 @@ class OfficeViewState extends State<OfficeView> {
   /// The rooms' characters, on [_clock]: at its quickest while one walks,
   /// slower while all sit or stand at their work. Stopped, all still, where
   /// motion is turned down.
-  final _scenes = OfficeScenes();
+  late final _scenes = (widget.scenes ?? OfficeScenes())..resume();
   late final _clock = StepClock(_slow)..addListener(_tick);
   static const _slow = Duration(milliseconds: 150);
   Duration _ticked = Duration.zero;
@@ -287,9 +292,10 @@ class OfficeViewState extends State<OfficeView> {
         buildingColumns(building),
         max: 8,
       ),
-      _ => _buildCanvas<int>(
-        (columns, _) => CampusGeometry.of(campus, columns: columns),
-        campusColumns,
+      _ => _buildCanvas<(int, int)>(
+        (option, _) =>
+            CampusGeometry.of(campus, columns: option.$1, perRow: option.$2),
+        campusOptions(campus.buildings.length),
         max: 5,
       ),
     };
@@ -792,6 +798,16 @@ class OfficeViewState extends State<OfficeView> {
               ),
             ],
             const Spacer(),
+            SidebarIconButton(
+              icon: widget.workspace.miniOffice
+                  ? Codicons.layoutPanelOff
+                  : Codicons.layoutPanelRight,
+              tooltip: widget.workspace.miniOffice
+                  ? l10n.officeMiniHide
+                  : l10n.officeMiniShow,
+              onTap: () =>
+                  widget.workspace.miniOffice = !widget.workspace.miniOffice,
+            ),
             SidebarIconButton(
               icon: Codicons.close,
               tooltip: l10n.officeClose,

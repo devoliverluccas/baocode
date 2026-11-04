@@ -91,6 +91,8 @@ import 'l10n/l10n.dart';
 import 'notifications/attention_host.dart';
 import 'notifications/attention_service.dart';
 import 'notifications/attention_settings.dart';
+import 'office/office_characters.dart' show OfficeScenes;
+import 'office/office_mini.dart';
 import 'office/office_view.dart';
 import 'platform/data_dir.dart' show DataDirectory;
 import 'platform/event_log.dart' show appEvent;
@@ -549,8 +551,8 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           ),
           settingsChanges: widget.settings?.files?.settings,
           l10n: () => context.l10n,
-          // The office covers the chat: what it shows is not in view.
-          shown: (thread) => !_office && _workspace.isShown(thread),
+          // The office covering the chat, it is not in view (chatCovered).
+          shown: _workspace.isShown,
           onOpen: (thread) => _windows != null
               ? _windows!.showAgent(thread)
               : _openNotifiedAgent(thread),
@@ -1356,7 +1358,17 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
 
   /// The office (lib/office) shows in place of the chat: the agents in a
   /// building per company.
-  bool _office = false;
+  bool get _office => _officeShown;
+  set _office(bool shown) {
+    _officeShown = shown;
+    _workspace.chatCovered = shown;
+  }
+
+  bool _officeShown = false;
+
+  /// The office's characters, kept while it is closed: opened again, who
+  /// was in is where it was (and the mini office's, the same).
+  final _officeScenes = OfficeScenes();
 
   void _showOffice() {
     _closeDrawer();
@@ -4350,26 +4362,51 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       }
     }
     final grid = _workspace.grid;
-    if (grid.isEmpty) return _buildChat(showToggle: showToggle);
-    return ChatGridView(
-      grid: grid,
-      drag: _drag,
-      onFocus: (thread) {
-        if (!identical(thread, _workspace.current)) _workspace.select(thread);
-      },
-      paneBuilder: (context, thread, place) {
-        // A project's terminals under the first of its panes: the panes of
-        // one project show them once.
-        final showsTerminals = _showsTerminals(thread);
-        final chat = _buildChat(
-          showToggle: showToggle,
-          pane: thread,
-          place: place,
-          showsTerminals: showsTerminals,
-        );
-        return showsTerminals ? _withTerminal(chat, thread) : chat;
-      },
-      onLinesMoved: _workspace.keepGridLines,
+    if (grid.isEmpty) {
+      return _withMiniOffice(_buildChat(showToggle: showToggle));
+    }
+    return _withMiniOffice(
+      ChatGridView(
+        grid: grid,
+        drag: _drag,
+        onFocus: (thread) {
+          if (!identical(thread, _workspace.current)) _workspace.select(thread);
+        },
+        paneBuilder: (context, thread, place) {
+          // A project's terminals under the first of its panes: the panes of
+          // one project show them once.
+          final showsTerminals = _showsTerminals(thread);
+          final chat = _buildChat(
+            showToggle: showToggle,
+            pane: thread,
+            place: place,
+            showsTerminals: showsTerminals,
+          );
+          return showsTerminals ? _withTerminal(chat, thread) : chat;
+        },
+        onLinesMoved: _workspace.keepGridLines,
+      ),
+    );
+  }
+
+  /// [chat] with the mini office in its top right corner, while it is on.
+  /// Always a Stack, so turning it on or off keeps the chat's state.
+  Widget _withMiniOffice(Widget chat) {
+    return Stack(
+      children: [
+        Positioned.fill(child: chat),
+        if (_workspace.miniOffice && _agentThread == null)
+          Positioned(
+            top: AppMetrics.titleBarHeight + 8,
+            right: 12,
+            child: MiniOffice(
+              workspace: _workspace,
+              scenes: _officeScenes,
+              project: _workspace.current?.project,
+              onOpen: _showOffice,
+            ),
+          ),
+      ],
     );
   }
 
@@ -4403,6 +4440,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     final header = WindowControls.drawsHeader;
     return OfficeView(
       workspace: _workspace,
+      scenes: _officeScenes,
       onClose: _closeCustomize,
       onOpenAgent: _openAgent,
       island: AppColors.conversationSurface,

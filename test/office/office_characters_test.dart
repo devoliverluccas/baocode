@@ -196,6 +196,30 @@ void main() {
     scene.sync([agent('a')], still: true);
     expect(scene.characters, hasLength(1));
   });
+
+  test('reopened, who was in is where it was; only who came walks in', () {
+    final scenes = OfficeScenes();
+    final a = agent('a'), b = agent('b');
+    OfficeCampus campus(List<OfficeAgent> agents) => OfficeCampus([
+      OfficeBuilding(name: 'x', rooms: [OfficeRoom(site, agents)], dim: []),
+    ]);
+    // First open since the app started: all sat, none at the door.
+    scenes.sync(campus([a]));
+    final first = scenes[site]!.characters.single;
+    expect((first.appear, first.walking), (1, false));
+    // Closed (no ticks), then opened again with b new.
+    scenes.resume();
+    scenes.sync(campus([a, b]));
+    final characters = scenes[site]!.characters;
+    expect(characters, hasLength(2));
+    expect(identical(characters.first, first), isTrue);
+    expect((first.appear, first.walking), (1, false));
+    expect(characters.last.appear, lessThan(1));
+    // Opened again, b not in yet: kept, it comes in on; a left: gone.
+    scenes.resume();
+    scenes.sync(campus([b]));
+    expect(scenes[site]!.characters, hasLength(1));
+  });
 }
 
 Iterable<Tile> _desks(OfficeLayout layout) => layout.desks.map((s) => s.tile);

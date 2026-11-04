@@ -168,7 +168,7 @@ void main() {
   ) async {
     workspace = Workspace.mock();
     host = _FakeHost();
-    var office = true;
+    workspace.chatCovered = true;
     service = AttentionService(
       workspace: workspace,
       host: host,
@@ -176,8 +176,8 @@ void main() {
       l10n: () => englishLocalizations,
       onOpen: opened.add,
       focused: () => focused,
-      // As the workbench's: the office covers the chat.
-      shown: (thread) => !office && workspace.isShown(thread),
+      // As the workbench's: the office covers the chat (chatCovered).
+      shown: workspace.isShown,
     )..start();
     addTearDown(service.dispose);
     final shown = workspace.selected;
@@ -187,7 +187,7 @@ void main() {
     expect(host.sounds, hasLength(1));
 
     // The chat back: its turn ends in view, untold.
-    office = false;
+    workspace.chatCovered = false;
     shown.session.answer(_answer);
     await _runUntilDone(tester, shown.session);
     expect(host.notifications, hasLength(1));

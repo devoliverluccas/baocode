@@ -12969,6 +12969,15 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get officeMiniShow => '在聊天中显示迷你办公室';
+
+  @override
+  String get officeMiniHide => '隐藏迷你办公室';
+
+  @override
+  String get officeMiniOpen => '打开办公室';
+
+  @override
   String get officeAssignTooltip => '将这些项目放入公司';
 
   @override

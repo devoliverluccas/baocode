@@ -13720,6 +13720,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get officeMiniShow => 'Show the mini office in the chat';
+
+  @override
+  String get officeMiniHide => 'Hide the mini office';
+
+  @override
+  String get officeMiniOpen => 'Open the office';
+
+  @override
   String get officeAssignTooltip => 'Put these projects in a company';
 
   @override

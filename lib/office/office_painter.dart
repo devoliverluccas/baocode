@@ -17,24 +17,33 @@ import 'office_sprites.dart';
 class CampusGeometry {
   CampusGeometry._(this.size, this.buildings, {this.labeled = false});
 
-  /// Level 1: the buildings side by side from the top left, each a column
-  /// of its rooms ([columns] abreast) from its top down.
-  factory CampusGeometry.of(OfficeCampus campus, {int columns = 2}) {
+  /// Level 1: the buildings side by side from the top left, [perRow] of
+  /// them a row (all, when null), each a column of its rooms ([columns]
+  /// abreast) from its top down.
+  factory CampusGeometry.of(
+    OfficeCampus campus, {
+    int columns = 2,
+    int? perRow,
+  }) {
     final buildings = <BuildingBox>[];
-    var x = gap;
-    var height = 0.0;
-    for (final building in campus.buildings) {
+    var x = gap, y = gap, bottom = 0.0, right = 0.0;
+    for (final (i, building) in campus.buildings.indexed) {
+      if (perRow != null && i > 0 && i % perRow == 0) {
+        x = gap;
+        y = bottom + gap;
+      }
       final box = _place(
         building,
         building.rooms,
         x,
         columns: columns,
-      )._down(gap);
+      )._down(y);
       buildings.add(box);
-      height = math.max(height, box.rect.bottom);
+      bottom = math.max(bottom, box.rect.bottom);
+      right = math.max(right, box.rect.right);
       x += box.rect.width + gap;
     }
-    return CampusGeometry._(Size(x, height + gap), buildings);
+    return CampusGeometry._(Size(right + gap, bottom + gap), buildings);
   }
 
   /// Level 2: [building] alone, its rooms with someone in ([columns]
@@ -322,6 +331,13 @@ class RoomBox {
 /// Level 1's rooms abreast a building to fit with, the first liked best.
 const campusColumns = [2, 1, 3, 4];
 
+/// Level 1's options ([CampusGeometry.of]'s columns and buildings a row)
+/// for [buildings] of them: all in a row first, then rows of fewer.
+List<(int, int)> campusOptions(int buildings) => [
+  for (var perRow = math.max(1, buildings); perRow >= 1; perRow--)
+    for (final columns in campusColumns) (columns, perRow),
+];
+
 /// Level 2's: rooms abreast, the most first, then cards at least abreast.
 List<(int, int)> buildingColumns(OfficeBuilding building) => [
   for (var rooms = math.min(6, building.rooms.length); rooms >= 1; rooms--)
@@ -360,8 +376,12 @@ class CampusPainter extends CustomPainter {
     this.highlight,
     this.l10n,
     this.font = const TextStyle(),
+    this.iconsOnly = false,
     super.repaint,
   });
+
+  /// The bubbles their icon alone, words or not (the mini office).
+  final bool iconsOnly;
 
   /// What the bubbles say in; English when null.
   final AppLocalizations? l10n;
@@ -622,7 +642,7 @@ class CampusPainter extends CustomPainter {
         if (character.member case final member?) {
           if (character.done > 0) {
             says.add(_Say(rect, _Mark.done, character: character));
-          } else if (geometry.labeled) {
+          } else if (geometry.labeled && !iconsOnly) {
             says.add(
               _Say(rect, _Mark.work, line: _memberLine(member), member: true),
             );
@@ -744,7 +764,7 @@ class CampusPainter extends CustomPainter {
 
   /// A bubble's widest, in logical pixels: on levels 2 and 3, on the
   /// campus.
-  static const maxBubble = 220.0, maxShortBubble = 150.0;
+  static const maxBubble = 220.0, maxShortBubble = 180.0;
 
   /// A bubble's padding, across and down; its icon's width, and the space
   /// after it.
@@ -780,10 +800,10 @@ class CampusPainter extends CustomPainter {
       final width =
           (geometry.labeled ? maxBubble : maxShortBubble) - _padX * 2 - icon;
       TextPainter? title, line;
-      if (geometry.labeled && !say.member && say.title != null) {
+      if (geometry.labeled && !iconsOnly && !say.member && say.title != null) {
         title = _layout(say.title!, 11, faint, maxWidth: width);
       }
-      if (say.line != null) {
+      if (say.line != null && !iconsOnly) {
         line = _layout(say.line!, 12.5, ink, bold: true, maxWidth: width);
       }
       Rect? box;

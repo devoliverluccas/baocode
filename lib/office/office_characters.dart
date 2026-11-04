@@ -214,8 +214,15 @@ class RoomScene {
   /// Those in the room are now [agents]: who is new comes in by the door,
   /// who is not among them any more leaves by it; each goes to where its
   /// activity is done. [still] (motion turned down): each is there at
-  /// once, and who leaves is gone.
-  void sync(List<OfficeAgent> agents, {bool still = false}) {
+  /// once, and who leaves is gone. [settle] (the office opened again):
+  /// who was in already is at once where it goes and who left is gone;
+  /// only who is new comes in by the door.
+  void sync(
+    List<OfficeAgent> agents, {
+    bool still = false,
+    bool settle = false,
+  }) {
+    final before = settle ? characters.toSet() : const <OfficeCharacter>{};
     final keys = {for (final agent in agents) _keyOf(agent)};
     for (final character in _byKey.values) {
       if (!keys.contains(_keyOf(character.agent))) character.leaving = true;
@@ -234,6 +241,12 @@ class RoomScene {
         ..leaving = false;
     }
     _place(still: still);
+    if (!settle) return;
+    for (final character in characters) {
+      if (!character.leaving && before.contains(character)) character._snap();
+    }
+    _byKey.removeWhere((_, c) => c.leaving);
+    _leavingMembers.clear();
   }
 
   /// What each one's thread runs now: the workspace tells of a status
@@ -556,7 +569,8 @@ class RoomScene {
 }
 
 /// The scenes of the campus's rooms, kept from build to build so their
-/// characters walk on.
+/// characters walk on; one for the app's life (the workbench's), so the
+/// office opened again finds them where they were.
 class OfficeScenes {
   final _rooms = <Project, RoomScene>{};
 
@@ -572,14 +586,33 @@ class OfficeScenes {
   /// Steps of 0.15 s gone: the PCs' and the server's frames.
   int get tick => _seconds ~/ 0.15;
 
+  /// Synced before: the first sync (the office first opened since the app
+  /// started) finds everyone sat at work, none coming in.
+  bool _synced = false;
+
+  /// A view of it opened ([resume]) since the last sync.
+  bool _resumed = false;
+
+  /// A view of it opens, its clock stopped till then: the next [sync]
+  /// settles who was in ([RoomScene.sync]'s settle), only who came since
+  /// coming in by the door.
+  void resume() => _resumed = true;
+
   /// To [campus]: a room's scene for each room shown, synced; those of
   /// rooms not shown any more dropped.
   void sync(OfficeCampus campus, {bool still = false}) {
+    final first = !_synced, settle = _resumed;
+    _synced = true;
+    _resumed = false;
     final shown = <Project>{};
     for (final building in campus.buildings) {
       for (final room in building.rooms) {
         shown.add(room.project);
-        (_rooms[room.project] ??= RoomScene()).sync(room.visible, still: still);
+        (_rooms[room.project] ??= RoomScene()).sync(
+          room.visible,
+          still: still || first,
+          settle: settle,
+        );
       }
     }
     _rooms.removeWhere((project, _) => !shown.contains(project));

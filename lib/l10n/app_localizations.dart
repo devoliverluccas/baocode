@@ -22323,6 +22323,24 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 conversation} other{{count} conversations}}'**
   String officeScoreConversations(int count);
 
+  /// No description provided for @officeMiniShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the mini office in the chat'**
+  String get officeMiniShow;
+
+  /// No description provided for @officeMiniHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide the mini office'**
+  String get officeMiniHide;
+
+  /// No description provided for @officeMiniOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the office'**
+  String get officeMiniOpen;
+
   /// No description provided for @officeAssignTooltip.
   ///
   /// In en, this message translates to:

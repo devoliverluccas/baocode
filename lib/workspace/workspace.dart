@@ -2592,6 +2592,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       _preferredEditor = editor;
     }
     _paneTabs = kept['paneTabs'] == true;
+    _miniOffice = kept['miniOffice'] == true;
     if (kept['layout'] == WorkspaceLayout.ide.name) {
       _layout = WorkspaceLayout.ide;
     }
@@ -2752,6 +2753,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       'editor': _preferredEditor.name,
       'layout': _layout.name,
       if (_paneTabs) 'paneTabs': true,
+      if (_miniOffice) 'miniOffice': true,
       'settings': _settings,
       'agents': _agentSettings,
       'addedDirs': _addedDirs,
@@ -3008,17 +3010,27 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   bool isShown(AgentThread thread) =>
       _windowAgents.contains(thread) ||
       (ideWindows != null
-          ? (_chatWindowShown && _grid.contains(thread)) ||
+          ? (_chatWindowShown && !_chatCovered && _grid.contains(thread)) ||
                 _windowFolders.any(
                   (folder) => identical(ideChat(folder), thread),
                 )
           : switch (_layout) {
-              WorkspaceLayout.chat => _grid.contains(thread),
+              WorkspaceLayout.chat => !_chatCovered && _grid.contains(thread),
               WorkspaceLayout.ide => switch (_ideFolder) {
                 final folder? => identical(ideChat(folder), thread),
                 null => false,
               },
             });
+
+  /// Something (the office) shows in place of the chat's panes: what they
+  /// hold is not in view, its "done" left unread till they show again.
+  bool get chatCovered => _chatCovered;
+  bool _chatCovered = false;
+  set chatCovered(bool covered) {
+    if (covered == _chatCovered) return;
+    _chatCovered = covered;
+    if (_markShownSeen()) notifyListeners();
+  }
 
   /// Marks what shows as seen, while the window is in front; whether any
   /// was unread.
@@ -3300,6 +3312,16 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   set paneTabs(bool tabs) {
     if (tabs == _paneTabs) return;
     _paneTabs = tabs;
+    _save();
+    notifyListeners();
+  }
+
+  /// Whether the chat shows the mini office (lib/office) in its corner.
+  bool get miniOffice => _miniOffice;
+  bool _miniOffice = false;
+  set miniOffice(bool shown) {
+    if (shown == _miniOffice) return;
+    _miniOffice = shown;
     _save();
     notifyListeners();
   }
