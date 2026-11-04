@@ -5,7 +5,7 @@ import 'package:flutter/widgets.dart';
 import '../chat/chat_models.dart' show ChatItem;
 import '../l10n/l10n.dart';
 import '../workspace/company_dialog.dart' show companyIcons;
-import '../workspace/workspace.dart' show ThreadStatus;
+import '../workspace/workspace.dart' show Project, ThreadStatus;
 import 'office_characters.dart';
 import 'office_layout.dart';
 import 'office_model.dart';
@@ -18,13 +18,18 @@ class CampusGeometry {
   CampusGeometry._(this.size, this.buildings, {this.labeled = false});
 
   /// Level 1: the buildings side by side from the top left, each a column
-  /// of its rooms (two abreast) from its top down.
-  factory CampusGeometry.of(OfficeCampus campus) {
+  /// of its rooms ([columns] abreast) from its top down.
+  factory CampusGeometry.of(OfficeCampus campus, {int columns = 2}) {
     final buildings = <BuildingBox>[];
     var x = gap;
     var height = 0.0;
     for (final building in campus.buildings) {
-      final box = _place(building, building.rooms, x, columns: 2)._down(gap);
+      final box = _place(
+        building,
+        building.rooms,
+        x,
+        columns: columns,
+      )._down(gap);
       buildings.add(box);
       height = math.max(height, box.rect.bottom);
       x += box.rect.width + gap;
@@ -32,18 +37,33 @@ class CampusGeometry {
     return CampusGeometry._(Size(x, height + gap), buildings);
   }
 
-  /// Level 2: [building] alone, a room for each of its projects (those not
-  /// in the Ativas empty, closed), each character with its title.
-  factory CampusGeometry.building(OfficeBuilding building) {
-    final rooms = [
-      ...building.rooms,
-      for (final project in building.dim) OfficeRoom(project, const []),
-    ];
-    final columns = math.min(4, math.sqrt(rooms.length).ceil());
-    return CampusGeometry._alone(
-      _place(building, rooms, gap, columns: columns, labeled: true),
-    );
-  }
+  /// Level 2: [building] alone, its rooms with someone in ([columns]
+  /// abreast), each character with its title; under them a card of a line
+  /// for each of its other projects, [card] logical pixels at [unit] of
+  /// them a sprite's pixel, at least [cardColumns] abreast, its
+  /// conversations' count from [counts].
+  factory CampusGeometry.building(
+    OfficeBuilding building, {
+    int? columns,
+    int cardColumns = 1,
+    double unit = 1,
+    Map<Project, int> counts = const {},
+  }) => CampusGeometry._alone(
+    _place(
+      building,
+      building.rooms,
+      gap,
+      columns: columns ?? math.min(4, math.sqrt(building.rooms.length).ceil()),
+      labeled: true,
+      cards: building.dim,
+      card: card / unit,
+      cardColumns: cardColumns,
+      counts: counts,
+    ),
+  );
+
+  /// A level 2 card's, in logical pixels.
+  static const card = Size(200, 30);
 
   /// Level 3: [room] of [building] alone, every character in it.
   factory CampusGeometry.room(OfficeBuilding building, OfficeRoom room) =>
@@ -70,12 +90,32 @@ class CampusGeometry {
     required int columns,
     bool labeled = false,
     bool all = false,
+    List<Project> cards = const [],
+    Size card = Size.zero,
+    int cardColumns = 1,
+    Map<Project, int> counts = const {},
   }) {
     columns = math.max(1, math.min(columns, rooms.length));
     final rows = (rooms.length / columns).ceil();
     final lines = all ? (rooms.single.overflow / perRow).ceil() : 0;
     final height = roomHeight + lines * lineHeight;
-    final outer = pad * 2 + columns * roomWidth + (columns - 1) * roomGap;
+    // The cards as wide as the rooms over them, else [cardColumns] of them.
+    final inner = rooms.isEmpty && cards.isNotEmpty
+        ? 0.0
+        : columns * roomWidth + (columns - 1) * roomGap;
+    final abreast = cards.isEmpty
+        ? 1
+        : math.min(
+            cards.length,
+            math.max(
+              cardColumns,
+              ((inner + roomGap) / (card.width + roomGap)).floor(),
+            ),
+          );
+    final outer =
+        pad * 2 +
+        math.max(inner, abreast * card.width + (abreast - 1) * roomGap);
+    final top = signHeight + pad + rows * (height + roomGap);
     final boxes = [
       for (final (i, room) in rooms.indexed)
         RoomBox._(
@@ -88,15 +128,29 @@ class CampusGeometry {
           ),
           all: all,
         ),
+      for (final (i, project) in cards.indexed)
+        RoomBox._(
+          OfficeRoom(project, const []),
+          Rect.fromLTWH(
+            x + pad + (i % abreast) * (card.width + roomGap),
+            top + (i ~/ abreast) * (card.height + roomGap),
+            card.width,
+            card.height,
+          ),
+          all: false,
+          card: true,
+          count: counts[project] ?? 0,
+        ),
     ];
-    final top = signHeight + pad + rows * (height + roomGap);
-    // The dim squares only on the campus: on level 2 they are rooms.
+    final under =
+        top + (cards.length / abreast).ceil() * (card.height + roomGap);
+    // The dim squares only on the campus: on level 2 they are cards.
     final dim = labeled ? 0.0 : dimHeight;
     return BuildingBox._(
       building,
-      Rect.fromLTWH(x, 0, outer, top + dim + pad),
+      Rect.fromLTWH(x, 0, outer, under + dim + pad),
       boxes,
-      Rect.fromLTWH(x + pad, top, outer - pad * 2, dim),
+      Rect.fromLTWH(x + pad, under, outer - pad * 2, dim),
     );
   }
 
@@ -168,32 +222,43 @@ class BuildingBox {
   BuildingBox _down(double dy) =>
       BuildingBox._(building, rect.translate(0, dy), [
         for (final room in rooms)
-          RoomBox._(room.room, room.rect.translate(0, dy), all: room.all),
+          RoomBox._(
+            room.room,
+            room.rect.translate(0, dy),
+            all: room.all,
+            card: room.card,
+            count: room.count,
+          ),
       ], dim.translate(0, dy));
 }
 
 class RoomBox {
-  RoomBox._(this.room, this.rect, {required this.all})
-    : agents = [
-        // Those its scene has: in a row on its floor.
-        for (final (i, agent) in room.visible.indexed)
-          (agent, _at(rect, i, rect.top + CampusGeometry.roomHeight)),
-        // The rest (level 3): in rows under it.
-        if (all)
-          for (final (i, agent)
-              in room.agents.skip(OfficeRoom.maxVisible).indexed)
-            (
-              agent,
-              _at(
-                rect,
-                i % CampusGeometry.perRow,
-                rect.top +
-                    CampusGeometry.roomHeight +
-                    (i ~/ CampusGeometry.perRow + 1) *
-                        CampusGeometry.lineHeight,
-              ),
-            ),
-      ];
+  RoomBox._(
+    this.room,
+    this.rect, {
+    required this.all,
+    this.card = false,
+    this.count = 0,
+  }) : agents = [
+         // Those its scene has: in a row on its floor.
+         for (final (i, agent) in room.visible.indexed)
+           (agent, _at(rect, i, rect.top + CampusGeometry.roomHeight)),
+         // The rest (level 3): in rows under it.
+         if (all)
+           for (final (i, agent)
+               in room.agents.skip(OfficeRoom.maxVisible).indexed)
+             (
+               agent,
+               _at(
+                 rect,
+                 i % CampusGeometry.perRow,
+                 rect.top +
+                     CampusGeometry.roomHeight +
+                     (i ~/ CampusGeometry.perRow + 1) *
+                         CampusGeometry.lineHeight,
+               ),
+             ),
+       ];
 
   /// The [i]th of a row whose feet are at [bottom].
   static Rect _at(Rect rect, int i, double bottom) => Rect.fromLTWH(
@@ -213,12 +278,57 @@ class RoomBox {
   /// [OfficeRoom.maxVisible].
   final bool all;
 
+  /// A project with no one in (level 2): a card of a line, its door shut,
+  /// its name and [count] of conversations.
+  final bool card;
+  final int count;
+
   /// Its characters, each where it stands in a row.
   final List<(OfficeAgent, Rect)> agents;
 
   /// Those its scene has no desk for (level 3): in rows under it, still.
   Iterable<(OfficeAgent, Rect)> get beyond => agents.skip(room.visible.length);
 }
+
+/// The largest whole [scale] of the screen's pixels a sprite's pixel takes
+/// (pixel art stays crisp at 125% as at 100%), up to [max], at which one of
+/// [options] lays [make] out within [space]; at 1 whatever its size, the
+/// first. [make] has the logical pixels a sprite's pixel takes: what is a
+/// size of the screen's (a level 2 card) is laid out in it.
+({CampusGeometry geometry, int scale, T option}) fitGeometry<T>(
+  CampusGeometry Function(T option, double unit) make,
+  List<T> options,
+  Size space, {
+  required int max,
+  double pixelRatio = 1,
+}) {
+  for (var scale = max; scale > 1; scale--) {
+    final unit = scale / pixelRatio;
+    for (final option in options) {
+      final geometry = make(option, unit);
+      if (geometry.size.width * unit <= space.width &&
+          geometry.size.height * unit <= space.height) {
+        return (geometry: geometry, scale: scale, option: option);
+      }
+    }
+  }
+  return (
+    geometry: make(options.first, 1 / pixelRatio),
+    scale: 1,
+    option: options.first,
+  );
+}
+
+/// Level 1's rooms abreast a building to fit with, the first liked best.
+const campusColumns = [2, 1, 3, 4];
+
+/// Level 2's: rooms abreast, the most first, then cards at least abreast.
+List<(int, int)> buildingColumns(OfficeBuilding building) => [
+  for (var rooms = math.min(6, building.rooms.length); rooms >= 1; rooms--)
+    for (var cards = 1; cards <= 6; cards++) (rooms, cards),
+  if (building.rooms.isEmpty)
+    for (var cards = 1; cards <= 6; cards++) (1, cards),
+];
 
 /// The colors [CampusPainter] draws with, from the theme.
 typedef OfficeColors = ({
@@ -237,6 +347,8 @@ typedef OfficeColors = ({
 
 /// The campus (level 1), at a whole [scale] of [geometry]: the companies'
 /// buildings, their rooms with the characters in them, the dim squares.
+/// Its words (signs, names, bubbles) at a size of the screen's, whatever
+/// the scale, in [font].
 class CampusPainter extends CustomPainter {
   CampusPainter({
     required this.geometry,
@@ -247,6 +359,7 @@ class CampusPainter extends CustomPainter {
     this.scenes,
     this.highlight,
     this.l10n,
+    this.font = const TextStyle(),
     super.repaint,
   });
 
@@ -260,6 +373,9 @@ class CampusPainter extends CustomPainter {
   final int scale;
   final double pixelRatio;
   final OfficeColors colors;
+
+  /// The app's text style: its family, the size of each word set here.
+  final TextStyle font;
 
   /// Null while they load: boxes stand in for the characters.
   final OfficeSprites? sprites;
@@ -276,10 +392,29 @@ class CampusPainter extends CustomPainter {
     null => colors.muted,
   };
 
+  /// Logical pixels a sprite's pixel takes.
+  double get unit => scale / pixelRatio;
+
+  /// What is drawn over the pixel art, in logical pixels: the words.
+  final _over = <void Function(Canvas)>[];
+
+  /// [rect], of the sprites' pixels, in logical ones.
+  Rect _screen(Rect rect) => Rect.fromLTRB(
+    rect.left * unit,
+    rect.top * unit,
+    rect.right * unit,
+    rect.bottom * unit,
+  );
+
+  /// A room's name strip, over its wall: logical pixels high.
+  static const labelHeight = 20.0;
+
   @override
   void paint(Canvas canvas, Size size) {
+    _over.clear();
     canvas
-      ..scale(scale / pixelRatio)
+      ..save()
+      ..scale(unit)
       ..drawRect(Offset.zero & geometry.size, Paint()..color = colors.sky);
     for (final building in geometry.buildings) {
       // Each stands on its own patch of ground.
@@ -295,10 +430,18 @@ class CampusPainter extends CustomPainter {
       );
       paintBuilding(canvas, building);
     }
+    canvas.restore();
+    for (final draw in _over) {
+      draw(canvas);
+    }
+    _over.clear();
     if (highlight case final rect?) {
-      canvas.drawRect(
-        rect.inflate(1),
-        _stroke(colors.text.withValues(alpha: 0.7)),
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          _screen(rect).inflate(1.5),
+          const Radius.circular(3),
+        ),
+        _stroke(colors.text.withValues(alpha: 0.7), 1.5),
       );
     }
   }
@@ -327,31 +470,38 @@ class CampusPainter extends CustomPainter {
         Paint()..color = _shade(color, 0.3),
       );
     final icon = companyIcons[box.building.icon];
-    final sign = box.sign.deflate(3);
-    if (icon != null) {
-      _text(
-        canvas,
-        String.fromCharCode(icon.codePoint),
-        sign,
-        size: 7,
-        color: ink,
-        family: icon.fontFamily,
-        package: icon.fontPackage,
-      );
-    }
     // The projects in no company: how many, the way to assign them beside.
     final none = box.building.company == null;
     final count = box.building.rooms.length + box.building.dim.length;
-    _text(
-      canvas,
-      none ? '${box.building.name} · $count' : box.building.name,
-      icon == null
-          ? sign
-          : Rect.fromLTRB(sign.left + 9, sign.top, sign.right, sign.bottom),
-      size: 7,
-      color: ink,
-      bold: true,
-    );
+    final sign = _screen(box.sign);
+    _over.add((canvas) {
+      var left = sign.left + 8;
+      if (icon != null) {
+        _write(
+          canvas,
+          String.fromCharCode(icon.codePoint),
+          Rect.fromLTRB(left, sign.top, sign.right, sign.bottom - 2),
+          size: 13,
+          color: ink,
+          family: icon.fontFamily,
+          package: icon.fontPackage,
+        );
+        left += 19;
+      }
+      _write(
+        canvas,
+        none ? '${box.building.name} · $count' : box.building.name,
+        Rect.fromLTRB(
+          left,
+          sign.top,
+          sign.right - (none ? 64 : 8),
+          sign.bottom - 2,
+        ),
+        size: 12.5,
+        color: ink,
+        bold: true,
+      );
+    });
     // The door, right of the dim squares, down to the ground.
     final door = Rect.fromLTRB(
       box.dim.right - doorWidth,
@@ -366,8 +516,8 @@ class CampusPainter extends CustomPainter {
         Paint()..color = ink,
       );
     for (final room in box.rooms) {
-      if (room.room.agents.isEmpty) {
-        paintClosed(canvas, room);
+      if (room.card) {
+        paintCard(room);
       } else {
         paintRoom(canvas, room, badge: color);
       }
@@ -375,41 +525,60 @@ class CampusPainter extends CustomPainter {
     paintDim(canvas, box);
   }
 
-  /// A project with nothing in the Ativas (level 2): dim, its door shut.
-  void paintClosed(Canvas canvas, RoomBox box) {
-    canvas.drawRect(box.rect, _stroke(colors.border));
-    _text(
-      canvas,
-      box.room.project.name,
-      Rect.fromLTWH(box.rect.left + 3, box.rect.top + 2, box.rect.width - 6, 8),
-      size: 6,
-      color: colors.muted,
-    );
-    final door = Rect.fromLTWH(
-      box.rect.center.dx - 5,
-      box.rect.bottom - 18,
-      10,
-      18,
-    );
-    canvas
-      ..drawRect(door, Paint()..color = colors.room)
-      ..drawRect(door, _stroke(colors.muted))
-      ..drawRect(
-        Rect.fromLTWH(door.right - 3, door.center.dy, 1, 1),
-        Paint()..color = colors.muted,
+  /// A project with nothing in the Ativas (level 2): a line, its door
+  /// shut, its name and how many conversations it has.
+  void paintCard(RoomBox box) {
+    final rect = _screen(box.rect);
+    _over.add((canvas) {
+      final card = RRect.fromRectAndRadius(rect, const Radius.circular(4));
+      canvas
+        ..drawRRect(card, Paint()..color = colors.room)
+        ..drawRRect(card, _stroke(colors.border));
+      // The door: 8×14, its knob.
+      final door = Rect.fromLTWH(
+        rect.left + 10,
+        (rect.center.dy - 7).roundToDouble(),
+        8,
+        14,
       );
+      canvas
+        ..drawRect(door, Paint()..color = colors.border)
+        ..drawRect(door, _stroke(colors.muted))
+        ..drawRect(
+          Rect.fromLTWH(door.right - 3, door.center.dy, 2, 2),
+          Paint()..color = colors.muted,
+        );
+      var right = rect.right - 10;
+      if (box.count > 0) {
+        final count = _layout('${box.count}', 11.5, colors.muted);
+        right -= count.width;
+        count
+          ..paint(canvas, Offset(right, rect.center.dy - count.height / 2))
+          ..dispose();
+        // A speech bubble before it, of the pixels' look: 7×6.
+        right -= 12;
+        final talk = Paint()..color = colors.muted;
+        final at = Offset(right, (rect.center.dy - 3).roundToDouble());
+        canvas
+          ..drawRect(Rect.fromLTWH(at.dx, at.dy, 8, 5), talk)
+          ..drawRect(Rect.fromLTWH(at.dx + 1, at.dy + 5, 2, 2), talk);
+        right -= 8;
+      }
+      _write(
+        canvas,
+        box.room.project.name,
+        Rect.fromLTRB(door.right + 10, rect.top, right, rect.bottom),
+        size: 12.5,
+        color: colors.text,
+      );
+    });
   }
 
   /// A room and who is in it, their company's [badge] on them: its scene
   /// (lib/office/office_characters.dart) where there is one, those it has
   /// no desk for (level 3) in rows under it.
   void paintRoom(Canvas canvas, RoomBox box, {Color? badge}) {
-    final label = Rect.fromLTWH(
-      box.rect.left + 3,
-      box.rect.top + 2,
-      box.rect.width - 6,
-      8,
-    );
+    _paintLabel(box);
     if ((sprites, scenes?[box.room.project]) case (
       final sprites?,
       final scene?,
@@ -443,18 +612,7 @@ class CampusPainter extends CustomPainter {
       }
       canvas
         ..restore()
-        ..drawRect(box.rect, _stroke(colors.border))
-        ..drawRect(
-          Rect.fromLTWH(label.left - 2, label.top - 1, label.width + 4, 9),
-          Paint()..color = const Color(0x99000000),
-        );
-      _text(
-        canvas,
-        box.room.project.name,
-        label,
-        size: 6,
-        color: const Color(0xffffffff),
-      );
+        ..drawRect(box.rect, _stroke(colors.border));
       final origin = RoomScene.origin(box.rect.topLeft);
       final says = <_Say>[];
       for (final character in scene.characters) {
@@ -481,28 +639,54 @@ class CampusPainter extends CustomPainter {
           ),
         );
         if (character.teamOverflow > 0) {
-          _text(
-            canvas,
-            '+${character.teamOverflow}',
-            Rect.fromLTWH(rect.right - 3, rect.top + 11, 10, 5),
-            size: 4,
-            color: const Color(0xffffffff),
+          final at = _screen(rect).topRight + const Offset(-4, 18);
+          _over.add(
+            (canvas) => _write(
+              canvas,
+              '+${character.teamOverflow}',
+              Rect.fromLTWH(at.dx, at.dy, 24, 14),
+              size: 10.5,
+              color: const Color(0xffffffff),
+              bold: true,
+            ),
           );
         }
       }
       _paintStill(canvas, box.beyond, sprites, says);
-      _paintSays(canvas, says, box.rect, origin);
-      _paintMore(canvas, box);
+      _paintSays(says, box.rect, origin);
+      _paintMore(box);
       return;
     }
     canvas
       ..drawRect(box.rect, Paint()..color = roomColor(box.room))
       ..drawRect(box.rect, _stroke(colors.border));
-    _text(canvas, box.room.project.name, label, size: 6, color: colors.text);
     final says = <_Say>[];
     _paintStill(canvas, box.agents, sprites, says);
-    _paintSays(canvas, says, box.rect, Offset.zero);
-    _paintMore(canvas, box);
+    _paintSays(says, box.rect, Offset.zero);
+    _paintMore(box);
+  }
+
+  /// The room's name on a dark strip over its wall.
+  void _paintLabel(RoomBox box) {
+    final rect = _screen(box.rect);
+    _over.add((canvas) {
+      final strip = Rect.fromLTWH(rect.left, rect.top, rect.width, labelHeight);
+      canvas.drawRect(strip, Paint()..color = const Color(0xa6000000));
+      _write(
+        canvas,
+        box.room.project.name,
+        Rect.fromLTRB(
+          strip.left + 7,
+          strip.top,
+          // Left of its icon and its "!" (CampusSigns).
+          strip.right - 24 - (box.room.waiting && !box.all ? 22 : 0),
+          strip.bottom,
+        ),
+        size: 12.5,
+        color: const Color(0xffffffff),
+        bold: geometry.labeled,
+      );
+    });
   }
 
   /// [agents] standing where they are: boxes while the sprites load; their
@@ -538,7 +722,7 @@ class CampusPainter extends CustomPainter {
 
   /// The bubble of a conversation's character at [rect], for its [status]
   /// and what its turn runs ([current]): its title on top, then what it
-  /// does ([activityText]); on the campus, its icon alone.
+  /// does ([activityText]); on the campus what it does alone.
   _Say _sayOf(
     OfficeAgent agent,
     ThreadStatus status,
@@ -558,50 +742,59 @@ class CampusPainter extends CustomPainter {
     character: character,
   );
 
-  /// [says] drawn, kept in [room]: each over its own head, a tail down to
-  /// it, the most urgent first; one that would cover another put a line
-  /// up, else down to its icon; who has neither (one idle) left out, its
-  /// title in its hover. [origin]: the scene's, for [OfficeCharacter.bubble].
-  void _paintSays(Canvas canvas, List<_Say> says, Rect room, Offset origin) {
+  /// A bubble's widest, in logical pixels: on levels 2 and 3, on the
+  /// campus.
+  static const maxBubble = 220.0, maxShortBubble = 150.0;
+
+  /// A bubble's padding, across and down; its icon's width, and the space
+  /// after it.
+  static const _padX = 7.0, _padY = 5.0, _iconWidth = 10.0, _iconGap = 6.0;
+
+  /// [says] laid out in logical pixels and drawn over all, kept in
+  /// [room]: each over its own head, a tail down to it, the most urgent
+  /// first; one that would cover another put a line up, else down to its
+  /// icon; who has neither (one idle) left out, its title in its hover.
+  /// [origin]: the scene's, for [OfficeCharacter.bubble].
+  void _paintSays(List<_Say> says, Rect room, Offset origin) {
     says.sort((a, b) => b.priority.compareTo(a.priority));
-    final placed = <(Rect, _Say, TextPainter?, TextPainter?)>[];
+    final area = _screen(room);
+    final placed = <_Bubble>[];
     bool clear(Rect box) =>
-        !placed.any((p) => p.$1.inflate(1).overlaps(box)) &&
-        box.top >= room.top + 10;
+        box.top >= area.top + labelHeight + 2 &&
+        !placed.any((p) => p.box.inflate(2).overlaps(box));
     for (final say in says) {
-      final head = say.head;
+      final head = say.head * unit;
       Rect over(Size size, double up) => Rect.fromLTWH(
         (head.dx - size.width / 2)
-            .clamp(room.left + 1, room.right - size.width - 1)
+            .clamp(
+              area.left + 2,
+              math.max(area.left + 2, area.right - size.width - 2),
+            )
             .roundToDouble(),
-        head.dy - 3 - size.height - up,
+        (head.dy - 6 - size.height - up).roundToDouble(),
         size.width,
         size.height,
       );
+      final (_, ink, faint) = say.colors(colors);
+      final icon = say.mark == null ? 0.0 : _iconWidth + _iconGap;
+      final width =
+          (geometry.labeled ? maxBubble : maxShortBubble) - _padX * 2 - icon;
       TextPainter? title, line;
-      if (geometry.labeled) {
-        final ink = say.colors.$2;
-        if (!say.member && say.title != null) {
-          title = _painter(say.title!, ink.withValues(alpha: 0.65), 3.5);
-        }
-        if (say.line != null) {
-          line = _painter(
-            say.line!,
-            ink,
-            4,
-            indent: say.mark == _Mark.work || say.mark == null ? 0 : 6,
-          );
-        }
+      if (geometry.labeled && !say.member && say.title != null) {
+        title = _layout(say.title!, 11, faint, maxWidth: width);
+      }
+      if (say.line != null) {
+        line = _layout(say.line!, 12.5, ink, bold: true, maxWidth: width);
       }
       Rect? box;
       if (title != null || line != null) {
-        final indent = say.mark == _Mark.work || say.mark == null ? 0 : 6;
         final size = Size(
-          (math.max(title?.width ?? 0, (line?.width ?? 0) + indent) + 4)
+          (icon + math.max(title?.width ?? 0, line?.width ?? 0) + _padX * 2)
               .ceilToDouble(),
-          2 + (title == null ? 0 : 4.5) + (line == null ? 0 : 4) + 1.5,
+          ((title?.height ?? 0) + (line?.height ?? 0) + _padY * 2)
+              .ceilToDouble(),
         );
-        for (final up in [0.0, size.height + 2, size.height * 2 + 4]) {
+        for (final up in [0.0, size.height + 4, size.height * 2 + 8]) {
           if (clear(over(size, up))) {
             box = over(size, up);
             break;
@@ -613,131 +806,110 @@ class CampusPainter extends CustomPainter {
         line?.dispose();
         (title, line) = (null, null);
         if (say.mark == null) continue;
-        const icon = Size(10, 7);
+        const only = Size(_iconWidth + 12, 20);
         box = [
-          for (final up in [0.0, 9.0, 18.0]) over(icon, up),
-        ].firstWhere(clear, orElse: () => over(icon, 0));
+          for (final up in [0.0, 24.0, 48.0]) over(only, up),
+        ].firstWhere(clear, orElse: () => over(only, 0));
       }
-      placed.add((box, say, title, line));
-      say.character?.bubble = box.shift(-origin);
+      placed.add((box: box, say: say, head: head, title: title, line: line));
+      say.character?.bubble = Rect.fromLTRB(
+        box.left / unit,
+        box.top / unit,
+        box.right / unit,
+        box.bottom / unit,
+      ).shift(-origin);
     }
     // The least urgent first: the most on top.
-    for (final (box, say, title, line) in placed.reversed) {
-      _paintBubble(canvas, box, say, title, line);
-    }
-  }
-
-  void _paintBubble(
-    Canvas canvas,
-    Rect box,
-    _Say say,
-    TextPainter? title,
-    TextPainter? line,
-  ) {
-    const dark = Color(0xff1c1c1e);
-    final (fill, ink) = say.colors;
-    final head = say.head;
-    final tail = head.dx.floorToDouble();
-    canvas
-      ..drawRect(box.inflate(1), Paint()..color = dark)
-      ..drawRect(box, Paint()..color = fill)
-      // A tail down to its head: a notch, then a line.
-      ..drawRect(
-        Rect.fromLTWH(tail - 1, box.bottom + 1, 3, 1),
-        Paint()..color = dark,
-      )
-      ..drawRect(Rect.fromLTWH(tail, box.bottom, 1, 1), Paint()..color = fill)
-      ..drawRect(
-        Rect.fromLTRB(tail, box.bottom + 2, tail + 1, head.dy - 1),
-        Paint()..color = dark,
-      );
-    if (title == null && line == null) {
-      _mark(canvas, say.mark!, box, ink);
-      return;
-    }
-    var y = box.top + 1.5;
-    if (title != null) {
-      title
-        ..paint(canvas, Offset(box.left + 2, y))
-        ..dispose();
-      y += 4.5;
-    }
-    if (line != null) {
-      if (say.mark case final mark? when mark != _Mark.work) {
-        _glyph(canvas, mark, Offset(box.left + 2, y), ink);
-        line.paint(canvas, Offset(box.left + 8, y));
-      } else {
-        line.paint(canvas, Offset(box.left + 2, y));
+    _over.add((canvas) {
+      for (final bubble in placed.reversed) {
+        _paintBubble(canvas, bubble);
       }
-      line.dispose();
-    }
+    });
   }
 
-  /// A bubble's icon in [box] (10×7): the "!" of one waiting, the ✓ of one
-  /// done, three dots at work, one up and down in turn.
-  void _mark(Canvas canvas, _Mark mark, Rect box, Color ink) {
+  void _paintBubble(Canvas canvas, _Bubble bubble) {
+    final _Bubble(:box, :say, :head, :title, :line) = bubble;
+    final (fill, ink, _) = say.colors(colors);
+    final edge = say.mark == _Mark.work || say.mark == null
+        ? colors.border
+        : _shade(fill, 0.3);
+    // A tail from its bottom to the head; a line on from it if put up.
+    final tip = Offset(
+      head.dx.clamp(box.left + 3, box.right - 3),
+      math.min(head.dy - 1, box.bottom + 5),
+    );
+    final root = tip.dx.clamp(box.left + 8, box.right - 8);
+    final shape = Path.combine(
+      PathOperation.union,
+      Path()..addRRect(RRect.fromRectAndRadius(box, const Radius.circular(4))),
+      Path()
+        ..moveTo(root - 5, box.bottom - 1)
+        ..lineTo(root + 5, box.bottom - 1)
+        ..lineTo(tip.dx, tip.dy)
+        ..close(),
+    );
+    canvas
+      ..drawPath(
+        shape.shift(const Offset(0, 1.5)),
+        Paint()
+          ..color = const Color(0x66000000)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+      )
+      ..drawPath(shape, Paint()..color = fill)
+      ..drawPath(shape, _stroke(edge));
+    if (head.dy - 1 > tip.dy + 1) {
+      canvas.drawLine(tip, Offset(tip.dx, head.dy - 1), _stroke(edge, 1.5));
+    }
+    var x = box.left + _padX;
+    if (say.mark case final mark?) {
+      if (title == null && line == null) {
+        _icon(canvas, mark, box.center.translate(-_iconWidth / 2, 0), ink);
+        return;
+      }
+      // By the line it goes with: what it does.
+      final y = line == null
+          ? box.center.dy
+          : box.bottom - _padY - line.height / 2;
+      _icon(canvas, mark, Offset(x, y), ink);
+      x += _iconWidth + _iconGap;
+    }
+    var y = box.top + _padY;
+    if (title != null) {
+      title.paint(canvas, Offset(x, y));
+      y += title.height;
+      title.dispose();
+    }
+    line
+      ?..paint(canvas, Offset(x, y))
+      ..dispose();
+  }
+
+  /// A bubble's icon, its left middle at [at], [_iconWidth] wide in
+  /// pixels of 2: the "!" of one waiting, the ✓ of one done, three dots
+  /// at work, one up and down in turn.
+  void _icon(Canvas canvas, _Mark mark, Offset at, Color ink, [double px = 2]) {
     final paint = Paint()..color = ink;
-    void dot(double x, double y, [double w = 2, double h = 2]) =>
-        canvas.drawRect(Rect.fromLTWH(box.left + x, box.top + y, w, h), paint);
-    switch (mark) {
-      case _Mark.wait:
-        dot(4, 1, 2, 3);
-        dot(4, 5, 2, 1);
-      case _Mark.done:
-        for (final (x, y) in const [(2, 3), (3, 4), (4, 3), (5, 2), (6, 1)]) {
-          dot(x.toDouble(), y.toDouble(), 2, 2);
-        }
-      case _Mark.work:
-        final up = (scenes?.tick ?? 0) ~/ 2 % 3;
-        for (var i = 0; i < 3; i++) {
-          dot(1 + i * 3.0, i == up ? 2 : 3);
-        }
-    }
-  }
-
-  /// [mark]'s glyph before a bubble's line, 5 wide at [at].
-  static void _glyph(Canvas canvas, _Mark mark, Offset at, Color ink) {
     final rows = switch (mark) {
+      _Mark.wait => const ['..x..', '..x..', '..x..', '.....', '..x..'],
       _Mark.done => const ['....x', '...x.', 'x.x..', '.x...'],
-      _ => const ['.xx..', '.xx..', '.xx..', '.....', '.xx..'],
+      _Mark.work => switch ((scenes?.tick ?? 0) ~/ 2 % 3) {
+        0 => const ['x....', '..x.x'],
+        1 => const ['..x..', 'x...x'],
+        _ => const ['....x', 'x.x..'],
+      },
     };
+    final top = (at.dy - rows.length * px / 2).roundToDouble();
     for (final (y, row) in rows.indexed) {
       for (var x = 0; x < row.length; x++) {
         if (row[x] == 'x') {
           canvas.drawRect(
-            Rect.fromLTWH(at.dx + x, at.dy + y, 1, 1),
-            Paint()..color = ink,
+            Rect.fromLTWH(at.dx + x * px, top + y * px, px, px),
+            paint,
           );
         }
       }
     }
   }
-
-  static TextPainter _painter(
-    String text,
-    Color color,
-    double size, {
-    double indent = 0,
-  }) => TextPainter(
-    text: TextSpan(
-      text: text,
-      style: TextStyle(
-        color: color,
-        fontFamily: _font,
-        fontSize: size,
-        height: 1,
-      ),
-    ),
-    maxLines: 1,
-    ellipsis: '…',
-    textDirection: TextDirection.ltr,
-  )..layout(maxWidth: maxBubble - 4 - indent);
-
-  /// Windows' own; where there is none, the platform's.
-  static const _font = 'Segoe UI';
-
-  /// A bubble's widest: a desk's.
-  static const maxBubble = 48.0;
 
   /// What a team member's bubble says: the call it runs ([activityText]),
   /// else what it was asked.
@@ -751,27 +923,38 @@ class CampusPainter extends CustomPainter {
   };
 
   /// The "+N" of those not shown, and a "!" if one of them waits.
-  void _paintMore(Canvas canvas, RoomBox box) {
+  void _paintMore(RoomBox box) {
     // Level 3 shows them all.
     if (box.all) return;
-    if (box.room.overflow > 0) {
-      _text(
-        canvas,
-        '+${box.room.overflow}',
-        Rect.fromLTWH(box.rect.right - 14, box.rect.bottom - 10, 12, 8),
-        size: 6,
-        color: colors.muted,
-      );
-    }
-    // Someone waiting among those not shown: the room says so.
-    if (box.room.waiting &&
-        !box.room.visible.any((a) => a.activity == OfficeActivity.waving)) {
-      final at = Rect.fromLTWH(box.rect.right - 12, box.rect.top + 1, 10, 7);
-      canvas
-        ..drawRect(at.inflate(1), Paint()..color = const Color(0xff1c1c1e))
-        ..drawRect(at, Paint()..color = const Color(0xffffcc00));
-      _mark(canvas, _Mark.wait, at, const Color(0xff1c1c1e));
-    }
+    final rect = _screen(box.rect);
+    _over.add((canvas) {
+      if (box.room.overflow > 0) {
+        _write(
+          canvas,
+          '+${box.room.overflow}',
+          Rect.fromLTWH(rect.right - 34, rect.bottom - 20, 30, 16),
+          size: 11.5,
+          color: const Color(0xffffffff),
+          bold: true,
+          right: true,
+        );
+      }
+      // Someone waiting among those not shown: the room says so.
+      if (box.room.waiting &&
+          !box.room.visible.any((a) => a.activity == OfficeActivity.waving)) {
+        final at = Rect.fromLTWH(rect.right - 44, rect.top + 2, 18, 16);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(at, const Radius.circular(3)),
+          Paint()..color = const Color(0xffffcc00),
+        );
+        _icon(
+          canvas,
+          _Mark.wait,
+          at.centerLeft + const Offset(4, 0),
+          const Color(0xff1c1c1e),
+        );
+      }
+    });
   }
 
   /// A room's light: on while someone in it works.
@@ -789,7 +972,7 @@ class CampusPainter extends CustomPainter {
   /// The building's projects with nothing in the Ativas: a dim square
   /// each, up to [maxDim] (or a row's worth), then how many more.
   void paintDim(Canvas canvas, BuildingBox box) {
-    // None on levels 2 and 3, where they are rooms.
+    // None on levels 2 and 3, where they are cards.
     if (box.dim.isEmpty) return;
     const side = 6.0, step = side + 2;
     final dim = box.building.dim;
@@ -805,12 +988,17 @@ class CampusPainter extends CustomPainter {
       );
     }
     if (dim.length > shown) {
-      _text(
-        canvas,
-        '+${dim.length - shown}',
-        Rect.fromLTWH(box.dim.left + shown * step, box.dim.top + 1, 16, 8),
-        size: 6,
-        color: colors.muted,
+      final at = _screen(
+        Rect.fromLTWH(box.dim.left + shown * step, box.dim.top, 16, 10),
+      );
+      _over.add(
+        (canvas) => _write(
+          canvas,
+          '+${dim.length - shown}',
+          Rect.fromLTWH(at.left, at.top, 40, at.height),
+          size: 11,
+          color: colors.muted,
+        ),
       );
     }
   }
@@ -823,39 +1011,70 @@ class CampusPainter extends CustomPainter {
   static Color _shade(Color color, double by) =>
       Color.lerp(color, const Color(0xff000000), by)!;
 
-  Paint _stroke(Color color) => Paint()
+  static Paint _stroke(Color color, [double width = 1]) => Paint()
     ..color = color
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 1;
+    ..strokeWidth = width;
 
-  void _text(
+  /// [text] at [size] logical pixels, a line, cut to [maxWidth].
+  TextPainter _layout(
+    String text,
+    double size,
+    Color color, {
+    bool bold = false,
+    double maxWidth = double.infinity,
+    String? family,
+    String? package,
+  }) => TextPainter(
+    text: TextSpan(
+      text: text,
+      style: font.copyWith(
+        color: color,
+        fontFamily: family ?? font.fontFamily,
+        fontFamilyFallback: family == null ? font.fontFamilyFallback : null,
+        package: package,
+        fontSize: size,
+        fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
+        height: 1.25,
+        decoration: TextDecoration.none,
+      ),
+    ),
+    maxLines: 1,
+    ellipsis: '…',
+    textDirection: TextDirection.ltr,
+  )..layout(maxWidth: math.max(0, maxWidth));
+
+  /// [text] in [within], in the middle of it down, from its left (or
+  /// [right]).
+  void _write(
     Canvas canvas,
     String text,
     Rect within, {
     required double size,
-    Color? color,
+    required Color color,
     bool bold = false,
+    bool right = false,
     String? family,
     String? package,
   }) {
-    final painter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color ?? colors.waiting,
-          fontFamily: family ?? _font,
-          package: package,
-          fontSize: size,
-          fontWeight: bold ? FontWeight.w600 : null,
-          height: 1,
+    final painter = _layout(
+      text,
+      size,
+      color,
+      bold: bold,
+      maxWidth: within.width,
+      family: family,
+      package: package,
+    );
+    painter
+      ..paint(
+        canvas,
+        Offset(
+          right ? within.right - painter.width : within.left,
+          (within.center.dy - painter.height / 2).roundToDouble(),
         ),
-      ),
-      maxLines: 1,
-      ellipsis: '…',
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: within.width);
-    painter.paint(canvas, within.topLeft);
-    painter.dispose();
+      )
+      ..dispose();
   }
 
   @override
@@ -864,6 +1083,7 @@ class CampusPainter extends CustomPainter {
       old.scale != scale ||
       old.pixelRatio != pixelRatio ||
       old.colors != colors ||
+      old.font != font ||
       old.sprites != sprites ||
       old.scenes != scenes ||
       old.highlight != highlight ||
@@ -872,6 +1092,15 @@ class CampusPainter extends CustomPainter {
 
 /// A bubble's icon: what one waits for, is done with, is at.
 enum _Mark { wait, done, work }
+
+/// A bubble laid out: where, in logical pixels, over [head], its lines.
+typedef _Bubble = ({
+  Rect box,
+  _Say say,
+  Offset head,
+  TextPainter? title,
+  TextPainter? line,
+});
 
 /// A bubble to draw over the head of the character at [rect].
 class _Say {
@@ -904,11 +1133,19 @@ class _Say {
     null => 0,
   };
 
-  /// Its fill and ink.
-  (Color, Color) get colors => switch (mark) {
-    _Mark.wait => (const Color(0xffffcc00), const Color(0xff1c1c1e)),
-    _Mark.done => (const Color(0xff34c759), const Color(0xffffffff)),
-    _Mark.work => (const Color(0xfff5f5f5), const Color(0xff1c1c1e)),
-    null => (const Color(0xffd1d1d6), const Color(0xff1c1c1e)),
+  /// Its fill, ink and fainter ink: at work (or idle) the theme's, waiting
+  /// yellow, done green.
+  (Color, Color, Color) colors(OfficeColors theme) => switch (mark) {
+    _Mark.wait => (
+      const Color(0xffffcc00),
+      const Color(0xff1c1c1e),
+      const Color(0xa61c1c1e),
+    ),
+    _Mark.done => (
+      const Color(0xff34c759),
+      const Color(0xff0b2512),
+      const Color(0xb30b2512),
+    ),
+    _ => (theme.building, theme.text, theme.muted),
   };
 }

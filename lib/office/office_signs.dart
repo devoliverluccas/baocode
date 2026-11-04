@@ -25,26 +25,31 @@ class CampusSigns extends StatelessWidget {
   final double unit;
   final Workspace workspace;
 
-  /// A room sign's icon, in sprite pixels: as tall as its name's line.
-  static const iconSide = 7.0;
+  /// A room sign's icon, in logical pixels: on its name's strip
+  /// ([CampusPainter.labelHeight]).
+  static const iconSide = 14.0;
 
   @override
   Widget build(BuildContext context) => Stack(
     children: [
       for (final building in geometry.buildings) ...[
         for (final room in building.rooms)
-          if (workspace.iconOf(room.room.project) case final icon?)
+          if (workspace.iconOf(room.room.project) case final icon?
+              when !room.card)
             Positioned(
               // Left of the "❗" of someone waiting not shown.
               left:
-                  (room.rect.right - iconSide - (room.room.waiting ? 11 : 2)) *
-                  unit,
-              top: (room.rect.top + 2) * unit,
+                  room.rect.right * unit -
+                  iconSide -
+                  (room.room.waiting && !room.all ? 26 : 5),
+              top:
+                  room.rect.top * unit +
+                  (CampusPainter.labelHeight - iconSide) / 2,
               child: IgnorePointer(
                 child: ProjectIconView(
                   icon: icon,
                   library: workspace.icons,
-                  size: iconSide * unit,
+                  size: iconSide,
                 ),
               ),
             ),
@@ -58,7 +63,7 @@ class CampusSigns extends StatelessWidget {
                 for (final room in building.building.rooms) room.project,
                 ...building.building.dim,
               ],
-              size: 6 * unit,
+              size: 11.5,
             ),
           ),
       ],
