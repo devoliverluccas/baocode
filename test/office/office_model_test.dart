@@ -1,4 +1,5 @@
 import 'package:baocode/chat/chat_models.dart';
+import 'package:baocode/kernel/kernel_types.dart';
 import 'package:baocode/office/office_characters.dart';
 import 'package:baocode/office/office_model.dart';
 import 'package:baocode/office/office_painter.dart';
@@ -186,5 +187,68 @@ void main() {
     expect(box.rect.contains(under.center), isTrue);
     final scenes = OfficeScenes()..sync(office, still: true);
     expect(scenes.find(geometry, under.center)?.$1.title, 'r4');
+  });
+
+  test("a team: the turn's subagents running, background ones before it, "
+      'tasks of no card; who is done out', () {
+    const user = UserMessageItem(text: 'go');
+    const reading = ToolCallItem(
+      kind: ToolKind.read,
+      target: 'lib/a/workspace.dart',
+      status: ToolStatus.running,
+    );
+    final team = teamIn(
+      [
+        const AgentItem(description: 'old', id: 'o'),
+        const AgentItem(description: 'bg', id: 'b', background: true),
+        user,
+        const AgentItem(
+          description: 'Subagent',
+          agentType: 'Explore',
+          id: 'e',
+          children: [
+            ToolCallItem(kind: ToolKind.grep, target: 'x'),
+            reading,
+          ],
+        ),
+        const AgentItem(
+          description: 'done',
+          id: 'd',
+          status: CommandStatus.succeeded,
+        ),
+        const AgentItem(description: 'plan', id: 'p'),
+      ],
+      [
+        KernelTask(
+          id: 't1',
+          toolUseId: 'b',
+          description: 'bg',
+          kind: KernelTaskKind.agent,
+          status: CommandStatus.running,
+          startedAt: DateTime(2026),
+        ),
+        KernelTask(
+          id: 't2',
+          description: 'workflow agent',
+          kind: KernelTaskKind.agent,
+          status: CommandStatus.running,
+          startedAt: DateTime(2026),
+        ),
+        KernelTask(
+          id: 't3',
+          description: 'npm run dev',
+          kind: KernelTaskKind.command,
+          status: CommandStatus.running,
+          startedAt: DateTime(2026),
+        ),
+      ],
+    );
+    expect(team.map((m) => m.id), ['b', 'e', 'p', 't2']);
+    expect(team[1].label, 'Explore');
+    expect(team[1].tool, same(reading));
+    expect(team[1].line, '📄 workspace.dart');
+    expect(team[2].line, 'plan');
+    expect(team[1].sprite, TeamMember(id: 'e', label: '').sprite);
+    expect(teamIn(const [user]), isEmpty);
   });
 }

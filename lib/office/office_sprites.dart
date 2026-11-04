@@ -37,6 +37,7 @@ class OfficeSprites {
   static const _furniture = [
     'CLOCK/CLOCK',
     'COFFEE/COFFEE',
+    'COFFEE_TABLE/COFFEE_TABLE',
     'DESK/DESK_FRONT',
     'DOUBLE_BOOKSHELF/DOUBLE_BOOKSHELF',
     'PC/PC_FRONT_OFF',

@@ -48,8 +48,8 @@ class Seat {
 ///     r2   K K K . K K K . S   desks with 2 PCs each; S the server
 ///     r3   K K K . K K K . S
 ///     r4   h . h . h . h . .   chairs
-///     r5   . . . . . F F c P   sofa, coffee, plant
-///     r6   . . . . . . . . .
+///     r5   . T T . . F F c P   meeting table, sofa, coffee, plant
+///     r6   . T T . . . . . .
 class OfficeLayout {
   OfficeLayout._();
 
@@ -74,6 +74,7 @@ class OfficeLayout {
     (col: 8, row: 3),
     (col: 7, row: 5),
     (col: 8, row: 5),
+    for (final col in [1, 2]) ...[(col: col, row: 5), (col: col, row: 6)],
   };
 
   /// In drawing order, back to front.
@@ -121,6 +122,7 @@ class OfficeLayout {
     OfficePiece((col: 8, row: 5), asset: 'PLANT/PLANT'),
     OfficePiece((col: 5, row: 5), asset: 'SOFA/SOFA_FRONT', seat: true),
     OfficePiece((col: 7, row: 5), asset: 'COFFEE/COFFEE'),
+    OfficePiece((col: 1, row: 6), asset: 'COFFEE_TABLE/COFFEE_TABLE'),
   ];
 
   /// The desks' chairs, facing their PCs.
@@ -198,22 +200,25 @@ class OfficeLayout {
   Seat? spotFor(OfficeActivity activity, Set<Tile> taken) =>
       spots[activity]?.where((spot) => !taken.contains(spot.tile)).firstOrNull;
 
-  /// Beside [seat], for an intern: a floor tile next to it, not a seat,
-  /// facing it.
-  Seat besides(Seat seat) {
-    final seats = {
-      for (final s in [...desks, ...sofa]) s.tile,
-    };
-    final (col, row) = (seat.tile.col, seat.tile.row);
-    return [
-              ((col: col + 1, row: row), OfficeFacing.left),
-              ((col: col - 1, row: row), OfficeFacing.right),
-              ((col: col, row: row + 1), OfficeFacing.up),
-            ]
-            .where((at) => isWalkable(at.$1) && !seats.contains(at.$1))
-            .map((at) => Seat(at.$1, at.$2))
-            .firstOrNull ??
-        seat;
+  /// Round the meeting table: where a team stands when no desk is free.
+  final List<Seat> table = const [
+    Seat((col: 0, row: 5), OfficeFacing.right),
+    Seat((col: 3, row: 5), OfficeFacing.left),
+    Seat((col: 0, row: 6), OfficeFacing.right),
+    Seat((col: 3, row: 6), OfficeFacing.left),
+  ];
+
+  /// Where a team member of the one at [lead] goes, none of [taken]: the
+  /// free desk nearest it, else round the [table]; null when all are.
+  Seat? teamSeat(Seat lead, Set<Tile> taken) {
+    int far(Seat seat) =>
+        (seat.tile.col - lead.tile.col).abs() +
+        (seat.tile.row - lead.tile.row).abs();
+    final desks =
+        this.desks.where((seat) => !taken.contains(seat.tile)).toList()
+          ..sort((a, b) => far(a).compareTo(far(b)));
+    return desks.firstOrNull ??
+        table.where((seat) => !taken.contains(seat.tile)).firstOrNull;
   }
 
   static final _random = math.Random();

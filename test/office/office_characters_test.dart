@@ -16,8 +16,15 @@ void main() {
     String title, {
     ThreadStatus status = ThreadStatus.running,
     ToolKind? tool,
+    List<TeamMember> team = const [],
   }) => OfficeAgent(
-    OfficeThread(project: site, title: title, status: status, tool: tool),
+    OfficeThread(
+      project: site,
+      title: title,
+      status: status,
+      tool: tool,
+      team: team,
+    ),
   );
 
   /// [seconds] of the scene going on, in frames of a 30th.
@@ -90,19 +97,39 @@ void main() {
     expect(scene.characters, isEmpty);
   });
 
-  test('an intern beside its boss while a subagent runs', () {
+  test('a team at the desks nearest its lead, then the table, then +N; '
+      'out when done', () {
+    TeamMember member(String id) => TeamMember(id: id, label: id);
     final scene = RoomScene(random: math.Random(1));
-    scene.sync([agent('a', tool: ToolKind.agent)]);
+    final team = [for (final id in 'pqrs'.split('')) member(id)];
+    scene.sync([agent('a', tool: ToolKind.agent, team: team), agent('b')]);
     run(scene);
-    final [boss, intern] = scene.characters;
-    expect(intern.isIntern, isTrue);
-    expect(intern.tile, layout.besides(boss.desk!).tile);
-    expect(boss.sitting, isTrue);
+    final [lead, ...members] = scene.characters
+        .where((c) => c.agent.title == 'a')
+        .toList();
+    expect(lead.sitting, isTrue);
+    expect(members.map((c) => c.member!.id), ['p', 'q', 'r']);
+    expect(members.map((c) => c.isMember), everyElement(isTrue));
+    expect(lead.teamOverflow, 1);
+    // Two desks free of four: sat at them, the third round the table.
+    final tiles = {for (final c in scene.characters) c.tile};
+    expect(tiles, hasLength(5));
+    expect(members.where((c) => c.sitting), hasLength(2));
+    expect(layout.table.map((s) => s.tile), contains(members.last.tile));
 
-    scene.sync([agent('a')]);
-    expect(intern.leaving, isTrue);
+    scene.sync([
+      agent('a', tool: ToolKind.agent, team: [team[1]]),
+      agent('b'),
+    ]);
+    expect(members[0].leaving, isTrue);
+    expect(members[1].leaving, isFalse);
     run(scene);
-    expect(scene.characters, [boss]);
+    expect(scene.characters.where((c) => c.isMember).single, members[1]);
+    expect(lead.teamOverflow, 0);
+
+    scene.sync([agent('b')]);
+    run(scene);
+    expect(scene.characters.map((c) => c.agent.title), ['b']);
   });
 
   test('each to its own desk; motion turned down, there at once', () {
