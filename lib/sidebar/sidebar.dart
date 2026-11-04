@@ -335,7 +335,8 @@ class Sidebar extends StatefulWidget {
 class _SidebarState extends State<Sidebar>
     with IdeKeyboardList<Sidebar>
     implements ChatDragList {
-  static const _rowHeight = IdeListColors.rowHeight;
+  // Taller than the IDE lists: easier to hit.
+  static const _rowHeight = 26.0;
 
   /// The agents a project shows until asked for more (pinned ones apart).
   static const _recent = 5;
