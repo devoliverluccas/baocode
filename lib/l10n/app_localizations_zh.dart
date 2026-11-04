@@ -12948,4 +12948,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String officeReception(int working, int waiting, int done) {
     return '$working 个工作中 · $waiting 个等你 · $done 个完成';
   }
+
+  @override
+  String get officeBack => '返回上一级';
 }

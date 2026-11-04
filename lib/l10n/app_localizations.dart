@@ -22298,6 +22298,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{working} working · {waiting} waiting for you · {done} done'**
   String officeReception(int working, int waiting, int done);
+
+  /// No description provided for @officeBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Up a level'**
+  String get officeBack;
 }
 
 class _AppLocalizationsDelegate

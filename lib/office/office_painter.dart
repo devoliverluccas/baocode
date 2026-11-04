@@ -9,38 +9,17 @@ import 'office_sprites.dart';
 /// is 16×32): what [CampusPainter] draws, and what a tap or hover is
 /// looked up in ([agentAt] and the like).
 class CampusGeometry {
-  CampusGeometry._(this.size, this.buildings);
+  CampusGeometry._(this.size, this.buildings, {this.labeled = false});
 
   factory CampusGeometry.of(OfficeCampus campus) {
     final buildings = <BuildingBox>[];
     var x = gap;
     var height = 0.0;
     for (final building in campus.buildings) {
-      final columns = math.max(1, math.min(2, building.rooms.length));
-      final rows = (building.rooms.length / columns).ceil();
-      final width = pad * 2 + columns * roomWidth + (columns - 1) * roomGap;
-      final rooms = [
-        for (final (i, room) in building.rooms.indexed)
-          RoomBox._(
-            room,
-            Rect.fromLTWH(
-              x + pad + (i % columns) * (roomWidth + roomGap),
-              signHeight + pad + (i ~/ columns) * (roomHeight + roomGap),
-              roomWidth,
-              roomHeight,
-            ),
-          ),
-      ];
-      final top = signHeight + pad + rows * (roomHeight + roomGap);
-      final box = BuildingBox._(
-        building,
-        Rect.fromLTWH(x, 0, width, top + dimHeight + pad),
-        rooms,
-        Rect.fromLTWH(x + pad, top, width - pad * 2, dimHeight),
-      );
+      final box = _place(building, building.rooms, x, columns: 2);
       buildings.add(box);
       height = math.max(height, box.rect.height);
-      x += width + gap;
+      x += box.rect.width + gap;
     }
     // On one ground: the lower ones down to the tallest's foot.
     final placed = [
@@ -49,21 +28,116 @@ class CampusGeometry {
     return CampusGeometry._(Size(x, height + gap * 2), placed);
   }
 
+  /// Level 2: [building] alone, a room for each of its projects (those not
+  /// in the Ativas empty, closed), each character with its title.
+  factory CampusGeometry.building(OfficeBuilding building) {
+    final rooms = [
+      ...building.rooms,
+      for (final project in building.dim) OfficeRoom(project, const []),
+    ];
+    final columns = math.min(4, math.sqrt(rooms.length).ceil());
+    return CampusGeometry._alone(
+      _place(building, rooms, gap, columns: columns, slot: labeledSlot),
+    );
+  }
+
+  /// Level 3: [room] of [building] alone, every character in it.
+  factory CampusGeometry.room(OfficeBuilding building, OfficeRoom room) =>
+      CampusGeometry._alone(
+        _place(
+          building,
+          [room],
+          gap,
+          columns: 1,
+          slot: labeledSlot,
+          perRow: roomPerRow,
+          all: true,
+        ),
+      );
+
+  factory CampusGeometry._alone(BuildingBox box) {
+    final placed = box._down(gap);
+    return CampusGeometry._(
+      Size(placed.rect.right + gap, placed.rect.bottom + gap),
+      [placed],
+      labeled: true,
+    );
+  }
+
+  /// [building] at [x], [rooms] in [columns] of rooms [perRow] characters
+  /// wide, [slot] apart: [all] its characters (level 3, in rows), or up to
+  /// [OfficeRoom.maxVisible] with the dim squares under (level 1).
+  static BuildingBox _place(
+    OfficeBuilding building,
+    List<OfficeRoom> rooms,
+    double x, {
+    required int columns,
+    double slot = OfficeSprites.frameWidth + 2,
+    int perRow = OfficeRoom.maxVisible,
+    bool all = false,
+  }) {
+    columns = math.max(1, math.min(columns, rooms.length));
+    final rows = (rooms.length / columns).ceil();
+    final width = perRow * slot + 6;
+    final lines = all
+        ? math.max(1, (rooms.single.agents.length / perRow).ceil())
+        : 1;
+    final labeled = slot == labeledSlot;
+    // Titles over the characters: under the project's name.
+    final height = roomHeight + (labeled ? 6 : 0) + (lines - 1) * lineHeight;
+    final outer = pad * 2 + columns * width + (columns - 1) * roomGap;
+    final boxes = [
+      for (final (i, room) in rooms.indexed)
+        RoomBox._(
+          room,
+          Rect.fromLTWH(
+            x + pad + (i % columns) * (width + roomGap),
+            signHeight + pad + (i ~/ columns) * (height + roomGap),
+            width,
+            height,
+          ),
+          slot: slot,
+          perRow: perRow,
+          all: all,
+        ),
+    ];
+    final top = signHeight + pad + rows * (height + roomGap);
+    // The dim squares only on the campus: on level 2 they are rooms.
+    final dim = labeled ? 0.0 : dimHeight;
+    return BuildingBox._(
+      building,
+      Rect.fromLTWH(x, 0, outer, top + dim + pad),
+      boxes,
+      Rect.fromLTWH(x + pad, top, outer - pad * 2, dim),
+    );
+  }
+
   static const gap = 8.0, pad = 6.0, signHeight = 14.0;
   static const roomWidth =
       OfficeRoom.maxVisible * (OfficeSprites.frameWidth + 2) + 6;
   static const roomHeight = OfficeSprites.frameHeight + 14;
   static const roomGap = 4.0, dimHeight = 10.0;
 
+  /// A character's width where it has its title over it, and how many a
+  /// row on level 3, each row this high.
+  static const labeledSlot = 30.0, roomPerRow = 6;
+  static const lineHeight = OfficeSprites.frameHeight + 8;
+
   /// The whole campus's.
   final Size size;
   final List<BuildingBox> buildings;
 
-  OfficeAgent? agentAt(Offset at) {
+  /// The characters have their titles over them (levels 2 and 3).
+  final bool labeled;
+
+  OfficeAgent? agentAt(Offset at) => find((_, rect) => rect.contains(at))?.$1;
+
+  /// The first character [test] holds for, and where it is.
+  (OfficeAgent, Rect)? find(bool Function(OfficeAgent, Rect) test) {
     for (final building in buildings) {
       for (final room in building.rooms) {
         for (final (agent, rect) in room.agents) {
-          if (rect.contains(at)) return agent;
+          if (test(agent, rect)) return (agent, rect);
         }
       }
     }
@@ -104,27 +178,51 @@ class BuildingBox {
   BuildingBox _down(double dy) =>
       BuildingBox._(building, rect.translate(0, dy), [
         for (final room in rooms)
-          RoomBox._(room.room, room.rect.translate(0, dy)),
+          RoomBox._(
+            room.room,
+            room.rect.translate(0, dy),
+            slot: room.slot,
+            perRow: room.perRow,
+            all: room.all,
+          ),
       ], dim.translate(0, dy));
 }
 
 class RoomBox {
-  RoomBox._(this.room, this.rect)
-    : agents = [
-        for (final (i, agent) in room.visible.indexed)
-          (
-            agent,
-            Rect.fromLTWH(
-              rect.left + 4 + i * (OfficeSprites.frameWidth + 2),
-              rect.bottom - OfficeSprites.frameHeight - 2,
-              OfficeSprites.frameWidth,
-              OfficeSprites.frameHeight,
-            ),
-          ),
-      ];
+  RoomBox._(
+    this.room,
+    this.rect, {
+    required this.slot,
+    required this.perRow,
+    required this.all,
+  }) : agents = [
+         // In rows of [perRow], the first on the floor.
+         for (final (i, agent) in (all ? room.agents : room.visible).indexed)
+           (
+             agent,
+             Rect.fromLTWH(
+               rect.left +
+                   3 +
+                   (i % perRow) * slot +
+                   (slot - OfficeSprites.frameWidth) / 2,
+               rect.bottom -
+                   OfficeSprites.frameHeight -
+                   2 -
+                   (i ~/ perRow) * CampusGeometry.lineHeight,
+               OfficeSprites.frameWidth,
+               OfficeSprites.frameHeight,
+             ),
+           ),
+       ];
 
   final OfficeRoom room;
   final Rect rect;
+
+  /// Each character's width, how many a row, and whether all of them are
+  /// placed (or up to [OfficeRoom.maxVisible]).
+  final double slot;
+  final int perRow;
+  final bool all;
 
   /// Its characters shown, each where it stands.
   final List<(OfficeAgent, Rect)> agents;
@@ -189,9 +287,54 @@ class CampusPainter extends CustomPainter {
       bold: true,
     );
     for (final room in box.rooms) {
+      if (room.room.agents.isEmpty) {
+        paintClosed(canvas, room);
+        continue;
+      }
       paintRoom(canvas, room);
+      if (geometry.labeled) {
+        for (final (agent, rect) in room.agents) {
+          _text(
+            canvas,
+            agent.title,
+            Rect.fromLTWH(
+              rect.center.dx - room.slot / 2 + 1,
+              rect.top - 5,
+              room.slot - 2,
+              5,
+            ),
+            size: 4,
+            color: colors.text,
+          );
+        }
+      }
     }
     paintDim(canvas, box);
+  }
+
+  /// A project with nothing in the Ativas (level 2): dim, its door shut.
+  void paintClosed(Canvas canvas, RoomBox box) {
+    canvas.drawRect(box.rect, _stroke(colors.border));
+    _text(
+      canvas,
+      box.room.project.name,
+      Rect.fromLTWH(box.rect.left + 3, box.rect.top + 2, box.rect.width - 6, 8),
+      size: 6,
+      color: colors.muted,
+    );
+    final door = Rect.fromLTWH(
+      box.rect.center.dx - 5,
+      box.rect.bottom - 18,
+      10,
+      18,
+    );
+    canvas
+      ..drawRect(door, Paint()..color = colors.room)
+      ..drawRect(door, _stroke(colors.muted))
+      ..drawRect(
+        Rect.fromLTWH(door.right - 3, door.center.dy, 1, 1),
+        Paint()..color = colors.muted,
+      );
   }
 
   /// A room and who is in it. Where the characters move and animate (see
@@ -242,6 +385,8 @@ class CampusPainter extends CustomPainter {
   /// The building's projects with nothing in the Ativas: a dim square
   /// each, up to a row's worth, then how many more.
   void paintDim(Canvas canvas, BuildingBox box) {
+    // None on levels 2 and 3, where they are rooms.
+    if (box.dim.isEmpty) return;
     const side = 6.0, step = side + 2;
     final dim = box.building.dim;
     final fits = ((box.dim.width - 16) / step).floor();

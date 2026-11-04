@@ -3677,5 +3677,6 @@
   "officeClose": "关闭办公室",
   "officeNoCompany": "无公司",
   "officeEmpty": "没有可显示的项目",
-  "officeReception": "{working} 个工作中 · {waiting} 个等你 · {done} 个完成"
+  "officeReception": "{working} 个工作中 · {waiting} 个等你 · {done} 个完成",
+  "officeBack": "返回上一级"
 }

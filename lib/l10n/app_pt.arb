@@ -3723,5 +3723,6 @@
   "officeClose": "Fechar o escritório",
   "officeNoCompany": "Sem empresa",
   "officeEmpty": "Nenhum projeto para mostrar",
-  "officeReception": "{working} trabalhando · {waiting} esperando você · {done} prontas"
+  "officeReception": "{working} trabalhando · {waiting} esperando você · {done} prontas",
+  "officeBack": "Voltar um nível"
 }

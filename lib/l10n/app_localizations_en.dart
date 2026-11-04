@@ -13698,4 +13698,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String officeReception(int working, int waiting, int done) {
     return '$working working · $waiting waiting for you · $done done';
   }
+
+  @override
+  String get officeBack => 'Up a level';
 }
