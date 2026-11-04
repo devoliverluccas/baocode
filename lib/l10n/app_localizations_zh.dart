@@ -12960,4 +12960,29 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get officeAssignTooltip => '将这些项目放入公司';
+
+  @override
+  String get officeBackLabel => '返回';
+
+  @override
+  String officeFloor(String name) {
+    return '$name 楼层';
+  }
+
+  @override
+  String officeRoom(String name) {
+    return '$name 房间';
+  }
+
+  @override
+  String get officePrevRoom => '上一个房间';
+
+  @override
+  String get officeNextRoom => '下一个房间';
+
+  @override
+  String get officePrevFloor => '上一层';
+
+  @override
+  String get officeNextFloor => '下一层';
 }

@@ -3681,5 +3681,12 @@
   "officeBack": "返回上一级",
   "officeNoAgents": "没有活跃的代理——激活一个对话",
   "officeAssign": "分配",
-  "officeAssignTooltip": "将这些项目放入公司"
+  "officeAssignTooltip": "将这些项目放入公司",
+  "officeBackLabel": "返回",
+  "officeFloor": "{name} 楼层",
+  "officeRoom": "{name} 房间",
+  "officePrevRoom": "上一个房间",
+  "officeNextRoom": "下一个房间",
+  "officePrevFloor": "上一层",
+  "officeNextFloor": "下一层"
 }

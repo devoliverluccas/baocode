@@ -22322,6 +22322,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Put these projects in a company'**
   String get officeAssignTooltip;
+
+  /// No description provided for @officeBackLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get officeBackLabel;
+
+  /// No description provided for @officeFloor.
+  ///
+  /// In en, this message translates to:
+  /// **'Floor {name}'**
+  String officeFloor(String name);
+
+  /// No description provided for @officeRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Room {name}'**
+  String officeRoom(String name);
+
+  /// No description provided for @officePrevRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous room'**
+  String get officePrevRoom;
+
+  /// No description provided for @officeNextRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Next room'**
+  String get officeNextRoom;
+
+  /// No description provided for @officePrevFloor.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous floor'**
+  String get officePrevFloor;
+
+  /// No description provided for @officeNextFloor.
+  ///
+  /// In en, this message translates to:
+  /// **'Next floor'**
+  String get officeNextFloor;
 }
 
 class _AppLocalizationsDelegate

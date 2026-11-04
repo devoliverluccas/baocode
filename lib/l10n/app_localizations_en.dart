@@ -13710,4 +13710,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get officeAssignTooltip => 'Put these projects in a company';
+
+  @override
+  String get officeBackLabel => 'Back';
+
+  @override
+  String officeFloor(String name) {
+    return 'Floor $name';
+  }
+
+  @override
+  String officeRoom(String name) {
+    return 'Room $name';
+  }
+
+  @override
+  String get officePrevRoom => 'Previous room';
+
+  @override
+  String get officeNextRoom => 'Next room';
+
+  @override
+  String get officePrevFloor => 'Previous floor';
+
+  @override
+  String get officeNextFloor => 'Next floor';
 }

@@ -8700,5 +8700,22 @@
   "officeBack": "Up a level",
   "officeNoAgents": "No active agents — activate a conversation",
   "officeAssign": "assign",
-  "officeAssignTooltip": "Put these projects in a company"
+  "officeAssignTooltip": "Put these projects in a company",
+  "officeBackLabel": "Back",
+  "officeFloor": "Floor {name}",
+  "@officeFloor": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "officeRoom": "Room {name}",
+  "@officeRoom": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "officePrevRoom": "Previous room",
+  "officeNextRoom": "Next room",
+  "officePrevFloor": "Previous floor",
+  "officeNextFloor": "Next floor"
 }

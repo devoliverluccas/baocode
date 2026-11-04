@@ -15,21 +15,19 @@ import 'office_sprites.dart';
 class CampusGeometry {
   CampusGeometry._(this.size, this.buildings, {this.labeled = false});
 
+  /// Level 1: the buildings side by side from the top left, each a column
+  /// of its rooms (two abreast) from its top down.
   factory CampusGeometry.of(OfficeCampus campus) {
     final buildings = <BuildingBox>[];
     var x = gap;
     var height = 0.0;
     for (final building in campus.buildings) {
-      final box = _place(building, building.rooms, x, columns: 2);
+      final box = _place(building, building.rooms, x, columns: 2)._down(gap);
       buildings.add(box);
-      height = math.max(height, box.rect.height);
+      height = math.max(height, box.rect.bottom);
       x += box.rect.width + gap;
     }
-    // On one ground: the lower ones down to the tallest's foot.
-    final placed = [
-      for (final box in buildings) box._down(height - box.rect.height + gap),
-    ];
-    return CampusGeometry._(Size(x, height + gap * 2), placed);
+    return CampusGeometry._(Size(x, height + gap), buildings);
   }
 
   /// Level 2: [building] alone, a room for each of its projects (those not
@@ -245,6 +243,7 @@ class CampusPainter extends CustomPainter {
     this.pixelRatio = 1,
     this.sprites,
     this.scenes,
+    this.highlight,
     super.repaint,
   });
 
@@ -262,6 +261,9 @@ class CampusPainter extends CustomPainter {
   /// The rooms' characters on the move; null: each stands still in a row.
   final OfficeScenes? scenes;
 
+  /// The building or room under the pointer, a click away: outlined.
+  final Rect? highlight;
+
   /// A building's own color; grey ([OfficeColors.muted]) without one.
   Color colorOf(OfficeBuilding building) => switch (building.color) {
     final argb? => Color(argb),
@@ -270,22 +272,28 @@ class CampusPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.scale(scale / pixelRatio);
-    // The buildings stand on the ground, their feet on its edge.
-    final whole = Offset.zero & geometry.size;
-    final ground = whole.bottom - CampusGeometry.gap;
     canvas
-      ..drawRect(whole, Paint()..color = colors.sky)
-      ..drawRect(
-        Rect.fromLTRB(0, ground, whole.right, whole.bottom),
-        Paint()..color = colors.ground,
-      )
-      ..drawRect(
-        Rect.fromLTRB(0, ground, whole.right, ground + 1),
-        Paint()..color = colors.border,
-      );
+      ..scale(scale / pixelRatio)
+      ..drawRect(Offset.zero & geometry.size, Paint()..color = colors.sky);
     for (final building in geometry.buildings) {
+      // Each stands on its own patch of ground.
+      final foot = building.rect.bottom;
+      canvas.drawRect(
+        Rect.fromLTRB(
+          building.rect.left - 2,
+          foot,
+          building.rect.right + 2,
+          foot + 3,
+        ),
+        Paint()..color = colors.ground,
+      );
       paintBuilding(canvas, building);
+    }
+    if (highlight case final rect?) {
+      canvas.drawRect(
+        rect.inflate(1),
+        _stroke(colors.text.withValues(alpha: 0.7)),
+      );
     }
   }
 
@@ -325,9 +333,12 @@ class CampusPainter extends CustomPainter {
         package: icon.fontPackage,
       );
     }
+    // The projects in no company: how many, the way to assign them beside.
+    final none = box.building.company == null;
+    final count = box.building.rooms.length + box.building.dim.length;
     _text(
       canvas,
-      box.building.name,
+      none ? '${box.building.name} · $count' : box.building.name,
       icon == null
           ? sign
           : Rect.fromLTRB(sign.left + 9, sign.top, sign.right, sign.bottom),
@@ -524,14 +535,20 @@ class CampusPainter extends CustomPainter {
   /// The door's width, at the right of the dim squares' row.
   static const doorWidth = 8.0;
 
+  /// At most this many dim squares, then "+N".
+  static const maxDim = 8;
+
   /// The building's projects with nothing in the Ativas: a dim square
-  /// each, up to a row's worth, then how many more.
+  /// each, up to [maxDim] (or a row's worth), then how many more.
   void paintDim(Canvas canvas, BuildingBox box) {
     // None on levels 2 and 3, where they are rooms.
     if (box.dim.isEmpty) return;
     const side = 6.0, step = side + 2;
     final dim = box.building.dim;
-    final fits = ((box.dim.width - 16 - doorWidth) / step).floor();
+    final fits = math.min(
+      maxDim,
+      ((box.dim.width - 16 - doorWidth) / step).floor(),
+    );
     final shown = dim.length > fits ? fits : dim.length;
     for (var i = 0; i < shown; i++) {
       canvas.drawRect(
@@ -600,5 +617,6 @@ class CampusPainter extends CustomPainter {
       old.pixelRatio != pixelRatio ||
       old.colors != colors ||
       old.sprites != sprites ||
-      old.scenes != scenes;
+      old.scenes != scenes ||
+      old.highlight != highlight;
 }

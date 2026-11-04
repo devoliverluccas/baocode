@@ -49,40 +49,43 @@ void main() {
         at * painter().scale.toDouble();
 
     // The mock's projects are in no company: one building.
-    expect(find.text('No company'), findsNothing);
+    expect(find.text('Floor No company'), findsNothing);
     expect(painter().geometry.labeled, isFalse);
+    // Anchored at the top left, not centered.
+    expect(painter().geometry.buildings.single.rect.top, CampusGeometry.gap);
     await tester.tapAt(
       onScreen(painter().geometry.buildings.single.sign.center),
     );
     await tester.pumpAndSettle();
     expect(painter().geometry.labeled, isTrue);
-    expect(find.text('No company'), findsOneWidget);
-    expect(find.byIcon(Codicons.chevronLeft), findsOneWidget);
+    expect(find.text('Floor No company'), findsOneWidget);
+    expect(find.text('Back'), findsOneWidget);
 
+    // Nothing clicked since: Esc still goes up.
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(painter().geometry.labeled, isFalse);
-    expect(find.byIcon(Codicons.chevronLeft), findsNothing);
+    expect(find.text('Back'), findsNothing);
 
-    // Down to a room, then "‹" twice back to the campus.
-    await tester.tapAt(
-      onScreen(painter().geometry.buildings.single.sign.center),
-    );
+    // A room clicked on the campus: straight into it.
+    final first = painter().geometry.buildings.single.rooms.first;
+    await tester.tapAt(onScreen(first.rect.topLeft + const Offset(2, 2)));
     await tester.pumpAndSettle();
-    final room = painter().geometry.buildings.single.rooms.first;
-    await tester.tapAt(onScreen(room.rect.topLeft + const Offset(2, 2)));
-    await tester.pumpAndSettle();
-    expect(find.text(room.room.project.name), findsWidgets);
     expect(painter().geometry.buildings.single.rooms, hasLength(1));
-    await tester.tap(find.byIcon(Codicons.chevronLeft));
+    expect(find.text('Room ${first.room.project.name}'), findsOneWidget);
+
+    // "›" to the building's next room, Backspace up to the building.
+    await tester.tap(find.byIcon(Codicons.chevronRight));
     await tester.pumpAndSettle();
-    expect(
-      painter().geometry.buildings.single.rooms.length,
-      greaterThanOrEqualTo(1),
-    );
-    await tester.tap(find.byIcon(Codicons.chevronLeft));
+    expect(find.text('Room ${first.room.project.name}'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
     await tester.pumpAndSettle();
-    expect(find.byIcon(Codicons.chevronLeft), findsNothing);
+    expect(painter().geometry.buildings.single.rooms.length, greaterThan(1));
+
+    // The breadcrumb's first segment: back to the campus.
+    await tester.tap(find.text('Office'));
+    await tester.pumpAndSettle();
+    expect(find.text('Back'), findsNothing);
     expect(opened, isEmpty);
   });
 }

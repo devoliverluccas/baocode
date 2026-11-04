@@ -23,7 +23,8 @@ import 'office_sprites.dart';
 /// The office, in place of the conversations as the stashes are: each
 /// company a building, each project with conversations in the Ativas a
 /// room, each of those a character. A building clicked fills it (level
-/// 2), a room clicked there fills it (level 3); Esc or "‹" goes back up.
+/// 2), a room clicked there or on the campus fills it (level 3); Esc,
+/// Backspace or "‹ Voltar" goes back up.
 class OfficeView extends StatefulWidget {
   const OfficeView({
     super.key,
@@ -66,6 +67,10 @@ class OfficeViewState extends State<OfficeView> {
   OfficeAgent? _hovered;
   Offset _hoverAt = Offset.zero;
 
+  /// The building or room under the pointer a click would go into, in the
+  /// sprites' pixels.
+  Rect? _target;
+
   /// The character right clicked, its menu open; the one being renamed,
   /// where it was then (in the sprites' pixels).
   AgentThread? _menuFor;
@@ -103,6 +108,10 @@ class OfficeViewState extends State<OfficeView> {
   @override
   void initState() {
     super.initState();
+    // Esc and Backspace work from the start, nothing clicked yet.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focus.requestFocus();
+    });
     OfficeSprites.load().then(
       (sprites) {
         if (mounted) setState(() => _sprites = sprites);
@@ -128,6 +137,7 @@ class OfficeViewState extends State<OfficeView> {
       _building = null;
     }
     _hovered = null;
+    _target = null;
     _renaming = null;
   });
 
@@ -135,6 +145,7 @@ class OfficeViewState extends State<OfficeView> {
     _building = building;
     _room = room;
     _hovered = null;
+    _target = null;
     _renaming = null;
   });
 
@@ -155,11 +166,7 @@ class OfficeViewState extends State<OfficeView> {
             .firstOrNull;
         final room = building == null
             ? null
-            : [
-                ...building.rooms,
-                for (final project in building.dim)
-                  OfficeRoom(project, const []),
-              ].where((r) => r.project == _room).firstOrNull;
+            : roomsOf(building).where((r) => r.project == _room).firstOrNull;
         _scenes.sync(campus, still: _still);
         // Nobody in a room: no frames to draw till someone comes.
         if (_scenes.isEmpty) {
@@ -188,8 +195,11 @@ class OfficeViewState extends State<OfficeView> {
           autofocus: true,
           onKeyEvent: (node, event) {
             if (event is! KeyDownEvent ||
-                event.logicalKey != LogicalKeyboardKey.escape ||
-                !zoomed) {
+                !zoomed ||
+                // Backspace is the rename field's own.
+                _renaming != null ||
+                (event.logicalKey != LogicalKeyboardKey.escape &&
+                    event.logicalKey != LogicalKeyboardKey.backspace)) {
               return KeyEventResult.ignored;
             }
             up();
@@ -198,7 +208,7 @@ class OfficeViewState extends State<OfficeView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildTitleBar(building, room),
+              _buildTitleBar(campus, building, room),
               Expanded(
                 child: switch (widget.island) {
                   final color? => Island(color: color, child: body),
@@ -267,26 +277,39 @@ class OfficeViewState extends State<OfficeView> {
         // Logical pixels a sprite's pixel takes.
         final unit = scale / ratio;
         Offset at(Offset local) => local / unit;
-        return Center(
+        // From the top left, not lost in the middle of the screen.
+        return Align(
+          alignment: Alignment.topLeft,
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SingleChildScrollView(
               child: SidebarMenu(
                 items: _agentItems,
                 builder: (context, menu) => MouseRegion(
-                  // Short of level 3, anywhere is a way in.
-                  cursor: _hovered != null || _room == null
+                  cursor: _hovered != null || _target != null
                       ? SystemMouseCursors.click
                       : MouseCursor.defer,
                   onHover: (event) {
-                    final agent = _hit(geometry, at(event.localPosition))?.$1;
-                    if (agent == null && _hovered == null) return;
+                    final local = at(event.localPosition);
+                    final agent = _hit(geometry, local)?.$1;
+                    final target = agent == null
+                        ? _targetAt(geometry, local)
+                        : null;
+                    if (agent == null &&
+                        _hovered == null &&
+                        target == _target) {
+                      return;
+                    }
                     setState(() {
                       _hovered = agent;
                       _hoverAt = event.localPosition;
+                      _target = target;
                     });
                   },
-                  onExit: (_) => setState(() => _hovered = null),
+                  onExit: (_) => setState(() {
+                    _hovered = null;
+                    _target = null;
+                  }),
                   child: GestureDetector(
                     onTapUp: (details) =>
                         _tap(geometry, at(details.localPosition)),
@@ -313,6 +336,7 @@ class OfficeViewState extends State<OfficeView> {
                             scenes: _scenes,
                             repaint: _clock,
                             colors: officeColors(),
+                            highlight: _target,
                           ),
                         ),
                         Positioned.fill(
@@ -364,20 +388,30 @@ class OfficeViewState extends State<OfficeView> {
       : _scenes.find(geometry, at);
 
   /// A character opens its conversation; elsewhere a click zooms in: to
-  /// the building from the campus, to the room from the building.
+  /// a room (from the campus or its building), else to the building.
   void _tap(CampusGeometry geometry, Offset at) {
     _focus.requestFocus();
     if (_hit(geometry, at)?.$1.thread case final thread?) {
       widget.onOpenAgent(thread);
       return;
     }
-    if (!zoomed) {
+    if (_room != null) return;
+    if (geometry.roomAt(at) case final box?) {
+      final building = geometry.buildings.firstWhere(
+        (b) => b.rooms.contains(box),
+      );
+      _go(building.building.name, box.room.project);
+    } else if (!zoomed) {
       if (geometry.buildingAt(at) case final box?) _go(box.building.name);
-    } else if (_room == null) {
-      if (geometry.roomAt(at) case final box?) {
-        _go(_building, box.room.project);
-      }
     }
+  }
+
+  /// What a click at [at] would go into: a room, else (on the campus) a
+  /// building; nothing at level 3.
+  Rect? _targetAt(CampusGeometry geometry, Offset at) {
+    if (_room != null) return null;
+    return geometry.roomAt(at)?.rect ??
+        (zoomed ? null : geometry.buildingAt(at)?.rect);
   }
 
   /// The right clicked character's: as the sidebar's row has them.
@@ -512,12 +546,19 @@ class OfficeViewState extends State<OfficeView> {
     );
   }
 
-  /// "‹" and where it is: Escritório › building › room, each a way back.
-  Widget _buildTitleBar(OfficeBuilding? building, OfficeRoom? room) {
+  /// "‹ Voltar" and where it is: Escritório › Andar … › Sala …, each a
+  /// way back; beside, the way to the room (or building) before and after.
+  Widget _buildTitleBar(
+    OfficeCampus campus,
+    OfficeBuilding? building,
+    OfficeRoom? room,
+  ) {
     final l10n = context.l10n;
     Widget crumb(String text, VoidCallback? onTap) {
       final label = Text(
         text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: onTap == null ? AppColors.text : AppColors.textMuted,
           fontSize: 12.5,
@@ -535,6 +576,21 @@ class OfficeViewState extends State<OfficeView> {
       ' › ',
       style: TextStyle(color: AppColors.textFaint, fontSize: 12.5),
     );
+    // At a room, its building's others; at a building, the other buildings.
+    final rooms = building == null ? const <OfficeRoom>[] : roomsOf(building);
+    final count = room != null ? rooms.length : campus.buildings.length;
+    final at = room != null
+        ? rooms.indexWhere((r) => r.project == room.project)
+        : campus.buildings.indexWhere((b) => b.name == building?.name);
+    void step(int by) {
+      final next = (at + by) % count;
+      if (room != null) {
+        _go(_building, rooms[next].project);
+      } else {
+        _go(campus.buildings[next].name);
+      }
+    }
+
     return TitleBarDoubleClick(
       child: SizedBox(
         height: AppMetrics.titleBarHeight,
@@ -546,24 +602,53 @@ class OfficeViewState extends State<OfficeView> {
               const SizedBox(width: 10),
             ],
             if (building != null) ...[
-              SidebarIconButton(
-                icon: Codicons.chevronLeft,
-                tooltip: l10n.officeBack,
-                onTap: up,
+              Tooltip(
+                message: l10n.officeBack,
+                child: TextButton.icon(
+                  onPressed: up,
+                  icon: const Icon(Codicons.chevronLeft, size: 14),
+                  label: Text(l10n.officeBackLabel),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.text,
+                    textStyle: const TextStyle(fontSize: 12.5),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: const Size(0, 24),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 8),
             ],
             crumb(l10n.officeTitle, building == null ? null : () => _go(null)),
             if (building != null) ...[
               separator,
-              crumb(
-                building.name,
-                room == null ? null : () => _go(building.name),
+              Flexible(
+                child: crumb(
+                  l10n.officeFloor(building.name),
+                  room == null ? null : () => _go(building.name),
+                ),
               ),
             ],
             if (room != null) ...[
               separator,
-              Flexible(child: crumb(room.project.name, null)),
+              Flexible(child: crumb(l10n.officeRoom(room.project.name), null)),
+            ],
+            if (building != null && count > 1 && at >= 0) ...[
+              const SizedBox(width: 8),
+              SidebarIconButton(
+                icon: Codicons.chevronLeft,
+                tooltip: room != null
+                    ? l10n.officePrevRoom
+                    : l10n.officePrevFloor,
+                onTap: () => step(-1),
+              ),
+              SidebarIconButton(
+                icon: Codicons.chevronRight,
+                tooltip: room != null
+                    ? l10n.officeNextRoom
+                    : l10n.officeNextFloor,
+                onTap: () => step(1),
+              ),
             ],
             const Spacer(),
             SidebarIconButton(
@@ -578,6 +663,13 @@ class OfficeViewState extends State<OfficeView> {
     );
   }
 }
+
+/// [building]'s rooms as level 2 has them: those with someone in, then
+/// its other projects', empty.
+List<OfficeRoom> roomsOf(OfficeBuilding building) => [
+  ...building.rooms,
+  for (final project in building.dim) OfficeRoom(project, const []),
+];
 
 /// The office's colors from the theme's: a night sky over dark ones, a day
 /// one over light ones, the ground grass in both.

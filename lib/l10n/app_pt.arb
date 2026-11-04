@@ -3727,5 +3727,12 @@
   "officeBack": "Voltar um nível",
   "officeNoAgents": "Nenhum agente ativo — ative uma conversa",
   "officeAssign": "atribuir",
-  "officeAssignTooltip": "Colocar estes projetos numa empresa"
+  "officeAssignTooltip": "Colocar estes projetos numa empresa",
+  "officeBackLabel": "Voltar",
+  "officeFloor": "Andar {name}",
+  "officeRoom": "Sala {name}",
+  "officePrevRoom": "Sala anterior",
+  "officeNextRoom": "Próxima sala",
+  "officePrevFloor": "Andar anterior",
+  "officeNextFloor": "Próximo andar"
 }

@@ -13806,4 +13806,29 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get officeAssignTooltip => 'Colocar estes projetos numa empresa';
+
+  @override
+  String get officeBackLabel => 'Voltar';
+
+  @override
+  String officeFloor(String name) {
+    return 'Andar $name';
+  }
+
+  @override
+  String officeRoom(String name) {
+    return 'Sala $name';
+  }
+
+  @override
+  String get officePrevRoom => 'Sala anterior';
+
+  @override
+  String get officeNextRoom => 'Próxima sala';
+
+  @override
+  String get officePrevFloor => 'Andar anterior';
+
+  @override
+  String get officeNextFloor => 'Próximo andar';
 }

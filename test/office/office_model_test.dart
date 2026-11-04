@@ -152,6 +152,12 @@ void main() {
     final (agent, at) = geometry.buildings[0].rooms.single.agents.single;
     expect(agent.title, 'asks');
     expect(geometry.agentAt(at.center), same(agent));
+    // Columns from the top left: every building's top on the same line.
+    expect(
+      {for (final b in geometry.buildings) b.rect.top},
+      {CampusGeometry.gap},
+    );
+    expect(geometry.buildings.first.rect.left, CampusGeometry.gap);
     const grey = Color(0xff808080);
     final recorder = PictureRecorder();
     CampusPainter(
