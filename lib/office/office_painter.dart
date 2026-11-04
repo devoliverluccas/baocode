@@ -455,23 +455,30 @@ class CampusPainter extends CustomPainter {
         color: const Color(0xffffffff),
       );
       final origin = RoomScene.origin(box.rect.topLeft);
-      for (final character in scene.characters) {
+      // The bubbles drawn so far: each next one goes up clear of them.
+      final placed = <Rect>[];
+      // Who leads first: the teams' bubbles go round theirs.
+      final characters = scene.characters
+        ..sort((a, b) => (a.isMember ? 1 : 0) - (b.isMember ? 1 : 0));
+      for (final character in characters) {
         character.bubble = null;
         if (character.leaving) continue;
         final rect = character.rect.shift(origin);
         if (character.member case final member?) {
           if (geometry.labeled && !character.walking) {
-            _say(canvas, _memberLine(member), rect);
+            _say(canvas, _memberLine(member), rect, box.rect, placed);
           }
           continue;
         }
         if (geometry.labeled) {
-          _title(canvas, character.agent, rect);
+          placed.add(_title(canvas, character.agent, rect));
           if (character.teamOverflow > 0) {
             _say(
               canvas,
               '+${character.teamOverflow}',
               rect.shift(const Offset(9, 6)),
+              box.rect,
+              placed,
             );
           }
         }
@@ -482,8 +489,7 @@ class CampusPainter extends CustomPainter {
           box.rect,
           character.status,
           character.current,
-          // Every other desk's a line higher: side by side, clear.
-          raised: character.tile.col ~/ 2 % 2 == 1,
+          placed,
         )?.shift(-origin);
       }
       _paintStill(canvas, box.beyond, box.rect, sprites);
@@ -506,38 +512,32 @@ class CampusPainter extends CustomPainter {
     Rect room,
     OfficeSprites? sprites,
   ) {
-    for (final (i, (agent, rect)) in agents.indexed) {
+    final placed = <Rect>[];
+    for (final (agent, rect) in agents) {
       switch (sprites) {
         case final sprites?:
           sprites.drawCharacter(canvas, agent.sprite, rect, hue: agent.hue);
         case null:
           canvas.drawRect(rect.deflate(3), Paint()..color = colors.muted);
       }
-      if (geometry.labeled) _title(canvas, agent, rect);
-      _bubble(
-        canvas,
-        rect,
-        room,
-        agent.status,
-        agent.source.current,
-        raised: i.isOdd,
-      );
+      if (geometry.labeled) placed.add(_title(canvas, agent, rect));
+      _bubble(canvas, rect, room, agent.status, agent.source.current, placed);
     }
   }
 
   /// The bubble over the head of one at [rect], kept in [room], for its
   /// [status] and what its turn runs ([current]): on the campus a pixel
   /// icon (the "!" of one waiting, the ✅ of one done, dots at work), closer
-  /// in a line saying it ([activityText]); [raised], a line higher. Where
-  /// it is drawn; null, none (one idle).
+  /// in a line saying it ([activityText]), clear of those [placed] before
+  /// (it joins them). Where it is drawn; null, none (one idle).
   Rect? _bubble(
     Canvas canvas,
     Rect rect,
     Rect room,
     ThreadStatus status,
-    ChatItem? current, {
-    bool raised = false,
-  }) {
+    ChatItem? current,
+    List<Rect> placed,
+  ) {
     if (status == ThreadStatus.idle) return null;
     const dark = Color(0xff1c1c1e);
     final (fill, ink) = switch (status) {
@@ -587,11 +587,16 @@ class CampusPainter extends CustomPainter {
     const height = 6.0;
     final width = (painter.width + 4).ceilToDouble();
     // Over the title, a pixel's tail down to it.
-    final bottom = rect.top - 7 - (raised ? height + 2 : 0);
-    final left = (rect.center.dx - width / 2)
-        .clamp(room.left + 1, room.right - width - 1)
-        .roundToDouble();
-    final box = Rect.fromLTWH(left, bottom - height, width, height);
+    final box = _free(
+      Rect.fromLTWH(
+        rect.center.dx - width / 2,
+        rect.top - 7 - height,
+        width,
+        height,
+      ),
+      room,
+      placed,
+    );
     final tail = rect.center.dx.floorToDouble();
     canvas
       ..drawRect(box.inflate(1), Paint()..color = dark)
@@ -609,19 +614,19 @@ class CampusPainter extends CustomPainter {
     return box;
   }
 
-  /// [agent]'s title over its character at [rect] (levels 2 and 3).
-  void _title(Canvas canvas, OfficeAgent agent, Rect rect) => _text(
-    canvas,
-    agent.title,
-    Rect.fromLTWH(
+  /// [agent]'s title over its character at [rect] (levels 2 and 3); where.
+  Rect _title(Canvas canvas, OfficeAgent agent, Rect rect) {
+    final at = Rect.fromLTWH(
       rect.center.dx - CampusGeometry.slot / 2 + 1,
       rect.top - 5,
       CampusGeometry.slot - 2,
       5,
-    ),
-    size: 4,
-    color: colors.text,
-  );
+    );
+    // On a dark strip: readable over the wall and the desks.
+    canvas.drawRect(at.inflate(0.5), Paint()..color = const Color(0x99000000));
+    _text(canvas, agent.title, at, size: 4, color: const Color(0xffffffff));
+    return at;
+  }
 
   /// What a team member's bubble says: the call it runs ([activityText]),
   /// else what it was asked.
@@ -634,9 +639,32 @@ class CampusPainter extends CustomPainter {
     null => member.label,
   };
 
+  /// [box] kept in [room], moved up a line at a time (up to 8) till clear
+  /// of those [placed]; it joins them.
+  static Rect _free(Rect box, Rect room, List<Rect> placed) {
+    var at = box.shift(
+      Offset(
+        (box.left.clamp(room.left + 1, room.right - box.width - 1) - box.left)
+            .roundToDouble(),
+        0,
+      ),
+    );
+    for (var i = 0; i < 8 && placed.any(at.inflate(1).overlaps); i++) {
+      at = at.shift(Offset(0, -box.height - 2));
+    }
+    placed.add(at);
+    return at;
+  }
+
   /// A team member's bubble over its head at [rect]: [line] on white,
-  /// as wide as it needs, up to two slots.
-  void _say(Canvas canvas, String line, Rect rect) {
+  /// as wide as it needs, up to two slots; in [room], clear of [placed].
+  void _say(
+    Canvas canvas,
+    String line,
+    Rect rect,
+    Rect room,
+    List<Rect> placed,
+  ) {
     final painter = TextPainter(
       text: TextSpan(
         text: line,
@@ -650,10 +678,14 @@ class CampusPainter extends CustomPainter {
       ellipsis: '…',
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: CampusGeometry.slot * 2);
-    final box = Rect.fromCenter(
-      center: Offset(rect.center.dx, rect.top - 2),
-      width: painter.width + 4,
-      height: 7,
+    final box = _free(
+      Rect.fromCenter(
+        center: Offset(rect.center.dx, rect.top - 2),
+        width: (painter.width + 4).ceilToDouble(),
+        height: 7,
+      ),
+      room,
+      placed,
     );
     canvas
       ..drawRect(box.inflate(1), Paint()..color = const Color(0xff1c1c1e))
