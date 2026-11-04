@@ -211,6 +211,17 @@ class AgentThread {
   /// The user named it: a title generated meanwhile is dropped.
   bool _named = false;
 
+  /// Its title is to be made again as the conversation says more (see
+  /// [Workspace._titleAgain]): a new agent's, once its first is asked.
+  bool _retitles = false;
+
+  /// Of what the user asked, how many messages its title was last made
+  /// from with an answer at hand.
+  int _titledFrom = 0;
+
+  /// Titles asked for it: an answer to an older ask is dropped.
+  int _titleAsks = 0;
+
   /// Last time it started, stopped, or asked something.
   DateTime updatedAt;
   bool pinned;
@@ -2920,10 +2931,15 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     } else {
       if (thread._title.isEmpty && session.itemCount > 0) {
         if (session.itemAt(0) case UserMessageItem(:final text)) {
-          thread._title = text.trim().split('\n').first;
+          // Its own words, not the tag of what it pasted.
+          final words = titleText(text);
+          thread._title = (words.isEmpty ? text.trim() : words)
+              .split('\n')
+              .first;
         }
       }
       if (thread._wantsTitle) _askTitle(thread);
+      if (thread._retitles && !session.isStreaming) _titleAgain(thread);
     }
     // Sent something: its folder is a project now, if it was not.
     if (!_isUntouched(thread) && !_projects.contains(thread.project)) {
@@ -3735,7 +3751,36 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       return;
     }
     if (titler == null || !session.canRename) return;
-    final model = session.selected(KernelChoiceKind.model);
+    // Made again once it is answered, and once it is asked more.
+    thread._retitles = true;
+    final words = titleText(text);
+    if (words.isNotEmpty) _generateTitle(thread, words);
+  }
+
+  /// Titles [thread] again from what its conversation says by now, its
+  /// first answer at hand: once after its first message, once after its
+  /// first two (the real ask is often in the second). A title the user
+  /// gave stands.
+  void _titleAgain(AgentThread thread) {
+    if (thread._named) {
+      thread._retitles = false;
+      return;
+    }
+    final session = thread.session;
+    final again = retitleText([
+      for (var i = 0; i < session.itemCount; i++) session.itemAt(i),
+    ], titledFrom: thread._titledFrom);
+    if (again == null) return;
+    thread._titledFrom = again.from;
+    if (again.from == agentRetitleMessages) thread._retitles = false;
+    if (again.text.isNotEmpty) _generateTitle(thread, again.text);
+  }
+
+  /// Has [titler] title [thread] after [text]: the latest ask's answer is
+  /// taken, unless the user named it meanwhile.
+  void _generateTitle(AgentThread thread, String text) {
+    final model = thread.session.selected(KernelChoiceKind.model);
+    final ask = ++thread._titleAsks;
     unawaited(
       _idOf(thread)
           .then(
@@ -3748,6 +3793,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
           )
           .then((title) {
             if (title == null || thread._named) return;
+            if (ask != thread._titleAsks) return;
             if (_disposed || !_threads.contains(thread)) return;
             _retitle(thread, title);
           }),

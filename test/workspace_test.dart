@@ -373,6 +373,53 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
+  testWidgets('a new agent is titled again once answered, from what it '
+      'asked and the answer, unless the user named it', (tester) async {
+    final renames = <String>[];
+    final asked = <String>[];
+    final workspace = await pumpLoaded(
+      tester,
+      kernel: titledClaude(renames),
+      titler: (message, {model, location, session}) async {
+        asked.add(message);
+        return 'Generated ${asked.length}';
+      },
+    );
+    final thread = workspace.selected;
+    thread.session.send(
+      const ComposerMessage(text: '[Image #1] why is it tall, in Ask mode'),
+    );
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    expect(asked, ['why is it tall, in Ask mode']);
+    expect(thread.title, 'Generated 1');
+    // Its answer streamed, the turn over.
+    for (var i = 0; i < 60 && thread.session.isStreaming; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(thread.session.isStreaming, isFalse);
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+    expect(asked, hasLength(2));
+    expect(asked.last, startsWith('why is it tall, in Ask mode\n\nAgent: '));
+    expect(thread.title, 'Generated 2');
+
+    // Named by the user: no more.
+    workspace.rename(thread, 'Composer height');
+    thread.session.send(const ComposerMessage(text: 'and the width?'));
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    for (var i = 0; i < 60 && thread.session.isStreaming; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+    expect(asked, hasLength(2));
+    expect(thread.title, 'Composer height');
+    thread.session.stop();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   testWidgets('a new agent asked with images alone is titled after the '
       'file, without the model', (tester) async {
     final renames = <String>[];
