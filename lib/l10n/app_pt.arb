@@ -3727,6 +3727,7 @@
   "officeBack": "Voltar um nível",
   "officeNoAgents": "Nenhum agente ativo — ative uma conversa",
   "officeAssign": "atribuir",
+  "officeScoreConversations": "{count, plural, =1{1 conversa} other{{count} conversas}}",
   "officeAssignTooltip": "Colocar estes projetos numa empresa",
   "officeBackLabel": "Voltar",
   "officeFloor": "Andar {name}",

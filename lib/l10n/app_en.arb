@@ -8700,6 +8700,13 @@
   "officeBack": "Up a level",
   "officeNoAgents": "No active agents — activate a conversation",
   "officeAssign": "assign",
+  "officeScoreConversations": "{count, plural, =1{1 conversation} other{{count} conversations}}",
+  "@officeScoreConversations": {
+    "description": "On a building's roof in the office: how many of its conversations worked today",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "officeAssignTooltip": "Put these projects in a company",
   "officeBackLabel": "Back",
   "officeFloor": "Floor {name}",

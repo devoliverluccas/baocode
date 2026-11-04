@@ -163,6 +163,41 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('the agent under the office is told of, in front or not', (
+    tester,
+  ) async {
+    workspace = Workspace.mock();
+    host = _FakeHost();
+    var office = true;
+    service = AttentionService(
+      workspace: workspace,
+      host: host,
+      settings: () => settings,
+      l10n: () => englishLocalizations,
+      onOpen: opened.add,
+      focused: () => focused,
+      // As the workbench's: the office covers the chat.
+      shown: (thread) => !office && workspace.isShown(thread),
+    )..start();
+    addTearDown(service.dispose);
+    final shown = workspace.selected;
+    shown.session.send(const ComposerMessage(text: '加一个限流'));
+    await _runUntilQuestion(tester, shown.session);
+    expect(host.notifications.single.body, startsWith('Needs your input'));
+    expect(host.sounds, hasLength(1));
+
+    // The chat back: its turn ends in view, untold.
+    office = false;
+    shown.session.answer(_answer);
+    await _runUntilDone(tester, shown.session);
+    expect(host.notifications, hasLength(1));
+
+    // Clicked: the agent opens.
+    host.openHandler!(host.notifications.single.id);
+    expect(opened, [shown]);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('follows the settings', (tester) async {
     settings = const AttentionSettings(
       events: {AttentionEvent.finished},
