@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import 'office_characters.dart';
+import 'office_layout.dart';
 import 'office_model.dart';
 import 'office_sprites.dart';
 
@@ -37,22 +39,14 @@ class CampusGeometry {
     ];
     final columns = math.min(4, math.sqrt(rooms.length).ceil());
     return CampusGeometry._alone(
-      _place(building, rooms, gap, columns: columns, slot: labeledSlot),
+      _place(building, rooms, gap, columns: columns, labeled: true),
     );
   }
 
   /// Level 3: [room] of [building] alone, every character in it.
   factory CampusGeometry.room(OfficeBuilding building, OfficeRoom room) =>
       CampusGeometry._alone(
-        _place(
-          building,
-          [room],
-          gap,
-          columns: 1,
-          slot: labeledSlot,
-          perRow: roomPerRow,
-          all: true,
-        ),
+        _place(building, [room], gap, columns: 1, labeled: true, all: true),
       );
 
   factory CampusGeometry._alone(BuildingBox box) {
@@ -64,40 +58,32 @@ class CampusGeometry {
     );
   }
 
-  /// [building] at [x], [rooms] in [columns] of rooms [perRow] characters
-  /// wide, [slot] apart: [all] its characters (level 3, in rows), or up to
+  /// [building] at [x], [rooms] in [columns]: [all] its characters (level
+  /// 3: those its scene has no desk for in rows under it), or up to
   /// [OfficeRoom.maxVisible] with the dim squares under (level 1).
   static BuildingBox _place(
     OfficeBuilding building,
     List<OfficeRoom> rooms,
     double x, {
     required int columns,
-    double slot = OfficeSprites.frameWidth + 2,
-    int perRow = OfficeRoom.maxVisible,
+    bool labeled = false,
     bool all = false,
   }) {
     columns = math.max(1, math.min(columns, rooms.length));
     final rows = (rooms.length / columns).ceil();
-    final width = perRow * slot + 6;
-    final lines = all
-        ? math.max(1, (rooms.single.agents.length / perRow).ceil())
-        : 1;
-    final labeled = slot == labeledSlot;
-    // Titles over the characters: under the project's name.
-    final height = roomHeight + (labeled ? 6 : 0) + (lines - 1) * lineHeight;
-    final outer = pad * 2 + columns * width + (columns - 1) * roomGap;
+    final lines = all ? (rooms.single.overflow / perRow).ceil() : 0;
+    final height = roomHeight + lines * lineHeight;
+    final outer = pad * 2 + columns * roomWidth + (columns - 1) * roomGap;
     final boxes = [
       for (final (i, room) in rooms.indexed)
         RoomBox._(
           room,
           Rect.fromLTWH(
-            x + pad + (i % columns) * (width + roomGap),
+            x + pad + (i % columns) * (roomWidth + roomGap),
             signHeight + pad + (i ~/ columns) * (height + roomGap),
-            width,
+            roomWidth,
             height,
           ),
-          slot: slot,
-          perRow: perRow,
           all: all,
         ),
     ];
@@ -113,14 +99,14 @@ class CampusGeometry {
   }
 
   static const gap = 8.0, pad = 6.0, signHeight = 14.0;
-  static const roomWidth =
-      OfficeRoom.maxVisible * (OfficeSprites.frameWidth + 2) + 6;
-  static const roomHeight = OfficeSprites.frameHeight + 14;
+  // A room's scene, its wall a tile over its floor (see OfficeLayout).
+  static const roomWidth = OfficeLayout.width;
+  static const roomHeight = OfficeLayout.height;
   static const roomGap = 4.0, dimHeight = 10.0;
 
-  /// A character's width where it has its title over it, and how many a
-  /// row on level 3, each row this high.
-  static const labeledSlot = 30.0, roomPerRow = 6;
+  /// A character's width where it stands in a row (its title over it), how
+  /// many a row, each row this high.
+  static const slot = 30.0, perRow = 4;
   static const lineHeight = OfficeSprites.frameHeight + 8;
 
   /// The whole campus's.
@@ -130,6 +116,8 @@ class CampusGeometry {
   /// The characters have their titles over them (levels 2 and 3).
   final bool labeled;
 
+  /// Where they stand in rows: where they are while the sprites load
+  /// (after, see [OfficeScenes.find]).
   OfficeAgent? agentAt(Offset at) => find((_, rect) => rect.contains(at))?.$1;
 
   /// The first character [test] holds for, and where it is.
@@ -178,54 +166,56 @@ class BuildingBox {
   BuildingBox _down(double dy) =>
       BuildingBox._(building, rect.translate(0, dy), [
         for (final room in rooms)
-          RoomBox._(
-            room.room,
-            room.rect.translate(0, dy),
-            slot: room.slot,
-            perRow: room.perRow,
-            all: room.all,
-          ),
+          RoomBox._(room.room, room.rect.translate(0, dy), all: room.all),
       ], dim.translate(0, dy));
 }
 
 class RoomBox {
-  RoomBox._(
-    this.room,
-    this.rect, {
-    required this.slot,
-    required this.perRow,
-    required this.all,
-  }) : agents = [
-         // In rows of [perRow], the first on the floor.
-         for (final (i, agent) in (all ? room.agents : room.visible).indexed)
-           (
-             agent,
-             Rect.fromLTWH(
-               rect.left +
-                   3 +
-                   (i % perRow) * slot +
-                   (slot - OfficeSprites.frameWidth) / 2,
-               rect.bottom -
-                   OfficeSprites.frameHeight -
-                   2 -
-                   (i ~/ perRow) * CampusGeometry.lineHeight,
-               OfficeSprites.frameWidth,
-               OfficeSprites.frameHeight,
-             ),
-           ),
-       ];
+  RoomBox._(this.room, this.rect, {required this.all})
+    : agents = [
+        // Those its scene has: in a row on its floor.
+        for (final (i, agent) in room.visible.indexed)
+          (agent, _at(rect, i, rect.top + CampusGeometry.roomHeight)),
+        // The rest (level 3): in rows under it.
+        if (all)
+          for (final (i, agent)
+              in room.agents.skip(OfficeRoom.maxVisible).indexed)
+            (
+              agent,
+              _at(
+                rect,
+                i % CampusGeometry.perRow,
+                rect.top +
+                    CampusGeometry.roomHeight +
+                    (i ~/ CampusGeometry.perRow + 1) *
+                        CampusGeometry.lineHeight,
+              ),
+            ),
+      ];
+
+  /// The [i]th of a row whose feet are at [bottom].
+  static Rect _at(Rect rect, int i, double bottom) => Rect.fromLTWH(
+    rect.left +
+        3 +
+        i * CampusGeometry.slot +
+        (CampusGeometry.slot - OfficeSprites.frameWidth) / 2,
+    bottom - OfficeSprites.frameHeight - 2,
+    OfficeSprites.frameWidth,
+    OfficeSprites.frameHeight,
+  );
 
   final OfficeRoom room;
   final Rect rect;
 
-  /// Each character's width, how many a row, and whether all of them are
-  /// placed (or up to [OfficeRoom.maxVisible]).
-  final double slot;
-  final int perRow;
+  /// All its characters are placed (level 3), or up to
+  /// [OfficeRoom.maxVisible].
   final bool all;
 
-  /// Its characters shown, each where it stands.
+  /// Its characters, each where it stands in a row.
   final List<(OfficeAgent, Rect)> agents;
+
+  /// Those its scene has no desk for (level 3): in rows under it, still.
+  Iterable<(OfficeAgent, Rect)> get beyond => agents.skip(room.visible.length);
 }
 
 /// The colors [CampusPainter] draws with, from the theme.
@@ -246,6 +236,7 @@ class CampusPainter extends CustomPainter {
     required this.scale,
     required this.colors,
     this.sprites,
+    this.scenes,
     super.repaint,
   });
 
@@ -255,6 +246,9 @@ class CampusPainter extends CustomPainter {
 
   /// Null while they load: boxes stand in for the characters.
   final OfficeSprites? sprites;
+
+  /// The rooms' characters on the move; null: each stands still in a row.
+  final OfficeScenes? scenes;
 
   /// A building's own color; grey ([OfficeColors.muted]) without one.
   Color colorOf(OfficeBuilding building) => switch (building.color) {
@@ -289,24 +283,8 @@ class CampusPainter extends CustomPainter {
     for (final room in box.rooms) {
       if (room.room.agents.isEmpty) {
         paintClosed(canvas, room);
-        continue;
-      }
-      paintRoom(canvas, room);
-      if (geometry.labeled) {
-        for (final (agent, rect) in room.agents) {
-          _text(
-            canvas,
-            agent.title,
-            Rect.fromLTWH(
-              rect.center.dx - room.slot / 2 + 1,
-              rect.top - 5,
-              room.slot - 2,
-              5,
-            ),
-            size: 4,
-            color: colors.text,
-          );
-        }
+      } else {
+        paintRoom(canvas, room, badge: color);
       }
     }
     paintDim(canvas, box);
@@ -337,20 +315,79 @@ class CampusPainter extends CustomPainter {
       );
   }
 
-  /// A room and who is in it. Where the characters move and animate (see
-  /// lib/office/office_characters.dart), that draws them instead.
-  void paintRoom(Canvas canvas, RoomBox box) {
+  /// A room and who is in it, their company's [badge] on them: its scene
+  /// (lib/office/office_characters.dart) where there is one, those it has
+  /// no desk for (level 3) in rows under it.
+  void paintRoom(Canvas canvas, RoomBox box, {Color? badge}) {
+    final label = Rect.fromLTWH(
+      box.rect.left + 3,
+      box.rect.top + 2,
+      box.rect.width - 6,
+      8,
+    );
+    if ((sprites, scenes?[box.room.project]) case (
+      final sprites?,
+      final scene?,
+    )) {
+      canvas
+        ..drawRect(box.rect, Paint()..color = colors.room)
+        ..save()
+        ..clipRect(
+          Rect.fromLTWH(
+            box.rect.left,
+            box.rect.top,
+            box.rect.width,
+            CampusGeometry.roomHeight,
+          ),
+        );
+      scene.paint(
+        canvas,
+        box.rect.topLeft,
+        sprites,
+        floor: box.room.project.name.length,
+        badge: badge,
+        tick: scenes!.tick,
+      );
+      canvas
+        ..restore()
+        ..drawRect(box.rect, _stroke(colors.border))
+        ..drawRect(
+          Rect.fromLTWH(label.left - 2, label.top - 1, label.width + 4, 9),
+          Paint()..color = const Color(0x99000000),
+        );
+      _text(
+        canvas,
+        box.room.project.name,
+        label,
+        size: 6,
+        color: const Color(0xffffffff),
+      );
+      if (geometry.labeled) {
+        final origin = RoomScene.origin(box.rect.topLeft);
+        for (final character in scene.characters) {
+          if (character.isIntern || character.leaving) continue;
+          _title(canvas, character.agent, character.rect.shift(origin));
+        }
+      }
+      _paintStill(canvas, box.beyond, sprites);
+      _paintMore(canvas, box);
+      return;
+    }
     canvas
       ..drawRect(box.rect, Paint()..color = colors.room)
       ..drawRect(box.rect, _stroke(colors.border));
-    _text(
-      canvas,
-      box.room.project.name,
-      Rect.fromLTWH(box.rect.left + 3, box.rect.top + 2, box.rect.width - 6, 8),
-      size: 6,
-      color: colors.text,
-    );
-    for (final (agent, rect) in box.agents) {
+    _text(canvas, box.room.project.name, label, size: 6, color: colors.text);
+    _paintStill(canvas, box.agents, sprites);
+    _paintMore(canvas, box);
+  }
+
+  /// [agents] standing where they are: boxes while the sprites load.
+  void _paintStill(
+    Canvas canvas,
+    Iterable<(OfficeAgent, Rect)> agents,
+    OfficeSprites? sprites,
+  ) {
+    for (final (agent, rect) in agents) {
       switch (sprites) {
         case final sprites?:
           sprites.drawCharacter(canvas, agent.sprite, rect);
@@ -360,7 +397,28 @@ class CampusPainter extends CustomPainter {
       if (agent.activity == OfficeActivity.waving) {
         _text(canvas, '❗', rect.translate(4, -6), size: 7);
       }
+      if (geometry.labeled) _title(canvas, agent, rect);
     }
+  }
+
+  /// [agent]'s title over its character at [rect] (levels 2 and 3).
+  void _title(Canvas canvas, OfficeAgent agent, Rect rect) => _text(
+    canvas,
+    agent.title,
+    Rect.fromLTWH(
+      rect.center.dx - CampusGeometry.slot / 2 + 1,
+      rect.top - 5,
+      CampusGeometry.slot - 2,
+      5,
+    ),
+    size: 4,
+    color: colors.text,
+  );
+
+  /// The "+N" of those not shown, and a "❗" if one of them waits.
+  void _paintMore(Canvas canvas, RoomBox box) {
+    // Level 3 shows them all.
+    if (box.all) return;
     if (box.room.overflow > 0) {
       _text(
         canvas,
@@ -444,5 +502,6 @@ class CampusPainter extends CustomPainter {
       old.geometry != geometry ||
       old.scale != scale ||
       old.colors != colors ||
-      old.sprites != sprites;
+      old.sprites != sprites ||
+      old.scenes != scenes;
 }

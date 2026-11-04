@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../base/step_clock.dart';
 import '../chat/widgets/inline_rename_field.dart';
 import '../ide/ide_hover.dart' show IdeHoverBox;
 import '../l10n/l10n.dart';
@@ -12,6 +13,7 @@ import '../workspace/companies.dart';
 import '../workspace/islands.dart';
 import '../workspace/title_bar_double_click.dart';
 import '../workspace/workspace.dart';
+import 'office_characters.dart';
 import 'office_model.dart';
 import 'office_painter.dart';
 import 'office_sprites.dart';
@@ -62,12 +64,39 @@ class OfficeViewState extends State<OfficeView> {
   OfficeAgent? _hovered;
   Offset _hoverAt = Offset.zero;
 
-  /// The character right clicked, its menu open; the one being renamed.
+  /// The character right clicked, its menu open; the one being renamed,
+  /// where it was then (in the sprites' pixels).
   AgentThread? _menuFor;
-  AgentThread? _renaming;
+  Rect _menuAt = Rect.zero;
+  (AgentThread, Rect)? _renaming;
 
   /// Level 2 or 3 is shown.
   bool get zoomed => _building != null;
+
+  /// The rooms' characters, on [_clock]: at its quickest while one walks,
+  /// slower while all sit or stand at their work. Stopped, all still, where
+  /// motion is turned down.
+  final _scenes = OfficeScenes();
+  late final _clock = StepClock(_slow)..addListener(_tick);
+  static const _slow = Duration(milliseconds: 150);
+  Duration _ticked = Duration.zero;
+  bool _still = false;
+
+  void _tick() {
+    final now = _clock.time;
+    // A late or first tick: no leap across the room.
+    final seconds = (now - _ticked).inMicroseconds / 1e6;
+    _ticked = now;
+    _scenes.update(seconds.clamp(0, 0.25));
+    _clock.step = _scenes.moving ? StepClock.frame : _slow;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _still = _clock.keepTo(context);
+    _ticked = _clock.time;
+  }
 
   @override
   void initState() {
@@ -84,6 +113,7 @@ class OfficeViewState extends State<OfficeView> {
 
   @override
   void dispose() {
+    _clock.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -128,6 +158,7 @@ class OfficeViewState extends State<OfficeView> {
                 for (final project in building.dim)
                   OfficeRoom(project, const []),
               ].where((r) => r.project == _room).firstOrNull;
+        _scenes.sync(campus, still: _still);
         final body = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -224,10 +255,6 @@ class OfficeViewState extends State<OfficeView> {
           scale--;
         }
         Offset at(Offset local) => local / scale.toDouble();
-        final renamed = switch (_renaming) {
-          final thread? => geometry.find((agent, _) => agent.thread == thread),
-          null => null,
-        };
         return Center(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -240,7 +267,7 @@ class OfficeViewState extends State<OfficeView> {
                       ? SystemMouseCursors.click
                       : MouseCursor.defer,
                   onHover: (event) {
-                    final agent = geometry.agentAt(at(event.localPosition));
+                    final agent = _hit(geometry, at(event.localPosition))?.$1;
                     if (agent == null && _hovered == null) return;
                     setState(() {
                       _hovered = agent;
@@ -252,11 +279,13 @@ class OfficeViewState extends State<OfficeView> {
                     onTapUp: (details) =>
                         _tap(geometry, at(details.localPosition)),
                     onSecondaryTapUp: (details) {
-                      final thread = geometry
-                          .agentAt(at(details.localPosition))
-                          ?.thread;
+                      final hit = _hit(geometry, at(details.localPosition));
+                      final thread = hit?.$1.thread;
                       if (thread == null) return;
-                      setState(() => _menuFor = thread);
+                      setState(() {
+                        _menuFor = thread;
+                        _menuAt = hit!.$2;
+                      });
                       menu.open(details.globalPosition);
                     },
                     child: Stack(
@@ -268,6 +297,8 @@ class OfficeViewState extends State<OfficeView> {
                             geometry: geometry,
                             scale: scale,
                             sprites: _sprites,
+                            scenes: _scenes,
+                            repaint: _clock,
                             colors: (
                               text: AppColors.text,
                               muted: AppColors.textMuted,
@@ -278,22 +309,22 @@ class OfficeViewState extends State<OfficeView> {
                             ),
                           ),
                         ),
-                        if (_hovered case final agent? when renamed == null)
+                        if (_hovered case final agent? when _renaming == null)
                           Positioned(
                             left: _hoverAt.dx + 12,
                             top: _hoverAt.dy + 12,
                             child: IgnorePointer(child: _buildHover(agent)),
                           ),
-                        if (renamed case (final agent, final rect))
+                        if (_renaming case (final thread, final rect))
                           Positioned(
                             left: rect.center.dx * scale - 100,
                             top: rect.top * scale,
                             width: 200,
                             child: InlineRenameField(
-                              initial: agent.title,
+                              initial: thread.title,
                               onDone: (title) {
-                                if (title != null && agent.thread != null) {
-                                  widget.workspace.rename(agent.thread!, title);
+                                if (title != null) {
+                                  widget.workspace.rename(thread, title);
                                 }
                                 setState(() => _renaming = null);
                                 _focus.requestFocus();
@@ -312,11 +343,18 @@ class OfficeViewState extends State<OfficeView> {
     );
   }
 
+  /// The character at [at] and where it is: where it walks once the
+  /// sprites are drawn, in its row before.
+  (OfficeAgent, Rect)? _hit(CampusGeometry geometry, Offset at) =>
+      _sprites == null
+      ? geometry.find((_, rect) => rect.contains(at))
+      : _scenes.find(geometry, at);
+
   /// A character opens its conversation; elsewhere a click zooms in: to
   /// the building from the campus, to the room from the building.
   void _tap(CampusGeometry geometry, Offset at) {
     _focus.requestFocus();
-    if (geometry.agentAt(at)?.thread case final thread?) {
+    if (_hit(geometry, at)?.$1.thread case final thread?) {
       widget.onOpenAgent(thread);
       return;
     }
@@ -348,7 +386,7 @@ class OfficeViewState extends State<OfficeView> {
       SidebarMenuItem(
         l10n.commonRename,
         icon: Icons.edit_outlined,
-        onSelected: () => setState(() => _renaming = thread),
+        onSelected: () => setState(() => _renaming = (thread, _menuAt)),
       ),
     ];
   }
