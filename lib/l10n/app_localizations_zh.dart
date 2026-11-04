@@ -12948,4 +12948,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String officeReception(int working, int waiting, int done) {
     return '$working 个工作中 · $waiting 个等你 · $done 个完成';
   }
+
+  @override
+  String get officeNoAgents => '没有活跃的代理——激活一个对话';
+
+  @override
+  String get officeAssign => '分配';
+
+  @override
+  String get officeAssignTooltip => '将这些项目放入公司';
 }

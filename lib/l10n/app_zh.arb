@@ -3677,5 +3677,8 @@
   "officeClose": "关闭办公室",
   "officeNoCompany": "无公司",
   "officeEmpty": "没有可显示的项目",
-  "officeReception": "{working} 个工作中 · {waiting} 个等你 · {done} 个完成"
+  "officeReception": "{working} 个工作中 · {waiting} 个等你 · {done} 个完成",
+  "officeNoAgents": "没有活跃的代理——激活一个对话",
+  "officeAssign": "分配",
+  "officeAssignTooltip": "将这些项目放入公司"
 }

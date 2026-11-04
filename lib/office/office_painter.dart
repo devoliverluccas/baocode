@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
+import '../workspace/company_dialog.dart' show companyIcons;
+import '../workspace/workspace.dart' show ThreadStatus;
 import 'office_model.dart';
 import 'office_sprites.dart';
 
@@ -138,6 +140,11 @@ typedef OfficeColors = ({
   Color room,
   Color building,
   Color waiting,
+  Color sky,
+  Color ground,
+
+  /// A room's, while someone in it works: its lights on.
+  Color lit,
 });
 
 /// The campus (level 1), at a whole [scale] of [geometry]: the companies'
@@ -147,12 +154,17 @@ class CampusPainter extends CustomPainter {
     required this.geometry,
     required this.scale,
     required this.colors,
+    this.pixelRatio = 1,
     this.sprites,
     super.repaint,
   });
 
   final CampusGeometry geometry;
+
+  /// The screen's pixels a sprite's pixel takes: whole, so pixel art stays
+  /// crisp whatever the display's scaling ([pixelRatio]).
   final int scale;
+  final double pixelRatio;
   final OfficeColors colors;
 
   /// Null while they load: boxes stand in for the characters.
@@ -166,28 +178,84 @@ class CampusPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.scale(scale.toDouble());
+    canvas.scale(scale / pixelRatio);
+    // The buildings stand on the ground, their feet on its edge.
+    final whole = Offset.zero & geometry.size;
+    final ground = whole.bottom - CampusGeometry.gap;
+    canvas
+      ..drawRect(whole, Paint()..color = colors.sky)
+      ..drawRect(
+        Rect.fromLTRB(0, ground, whole.right, whole.bottom),
+        Paint()..color = colors.ground,
+      )
+      ..drawRect(
+        Rect.fromLTRB(0, ground, whole.right, ground + 1),
+        Paint()..color = colors.border,
+      );
     for (final building in geometry.buildings) {
       paintBuilding(canvas, building);
     }
   }
 
+  /// Its facade tinted with its color, under a roof in it that bears its
+  /// icon and name, a door at its foot.
   void paintBuilding(Canvas canvas, BuildingBox box) {
     final color = colorOf(box.building);
+    final ink = inkOn(color);
+    // The roof juts out a pixel each side, a darker eave under it.
+    final roof = Rect.fromLTRB(
+      box.sign.left - 1,
+      box.sign.top,
+      box.sign.right + 1,
+      box.sign.bottom,
+    );
     canvas
-      ..drawRect(box.rect, Paint()..color = colors.building)
+      ..drawRect(
+        box.rect,
+        Paint()..color = Color.lerp(colors.building, color, 0.18)!,
+      )
       ..drawRect(box.rect, _stroke(colors.border))
-      ..drawRect(box.sign, Paint()..color = color);
+      ..drawRect(roof, Paint()..color = color)
+      ..drawRect(
+        Rect.fromLTRB(roof.left, roof.bottom - 2, roof.right, roof.bottom),
+        Paint()..color = _shade(color, 0.3),
+      );
+    final icon = companyIcons[box.building.icon];
+    final sign = box.sign.deflate(3);
+    if (icon != null) {
+      _text(
+        canvas,
+        String.fromCharCode(icon.codePoint),
+        sign,
+        size: 7,
+        color: ink,
+        family: icon.fontFamily,
+        package: icon.fontPackage,
+      );
+    }
     _text(
       canvas,
       box.building.name,
-      box.sign.deflate(3),
+      icon == null
+          ? sign
+          : Rect.fromLTRB(sign.left + 9, sign.top, sign.right, sign.bottom),
       size: 7,
-      color: color.computeLuminance() > 0.5
-          ? const Color(0xff000000)
-          : const Color(0xffffffff),
+      color: ink,
       bold: true,
     );
+    // The door, right of the dim squares, down to the ground.
+    final door = Rect.fromLTRB(
+      box.dim.right - doorWidth,
+      box.dim.top,
+      box.dim.right,
+      box.rect.bottom,
+    );
+    canvas
+      ..drawRect(door, Paint()..color = _shade(color, 0.45))
+      ..drawRect(
+        Rect.fromLTWH(door.right - 3, door.center.dy.floorToDouble(), 1, 1),
+        Paint()..color = ink,
+      );
     for (final room in box.rooms) {
       paintRoom(canvas, room);
     }
@@ -198,7 +266,7 @@ class CampusPainter extends CustomPainter {
   /// lib/office/office_characters.dart), that draws them instead.
   void paintRoom(Canvas canvas, RoomBox box) {
     canvas
-      ..drawRect(box.rect, Paint()..color = colors.room)
+      ..drawRect(box.rect, Paint()..color = roomColor(box.room))
       ..drawRect(box.rect, _stroke(colors.border));
     _text(
       canvas,
@@ -239,12 +307,21 @@ class CampusPainter extends CustomPainter {
     }
   }
 
+  /// A room's light: on while someone in it works.
+  Color roomColor(OfficeRoom room) =>
+      room.agents.any((agent) => agent.status == ThreadStatus.running)
+      ? colors.lit
+      : colors.room;
+
+  /// The door's width, at the right of the dim squares' row.
+  static const doorWidth = 8.0;
+
   /// The building's projects with nothing in the Ativas: a dim square
   /// each, up to a row's worth, then how many more.
   void paintDim(Canvas canvas, BuildingBox box) {
     const side = 6.0, step = side + 2;
     final dim = box.building.dim;
-    final fits = ((box.dim.width - 16) / step).floor();
+    final fits = ((box.dim.width - 16 - doorWidth) / step).floor();
     final shown = dim.length > fits ? fits : dim.length;
     for (var i = 0; i < shown; i++) {
       canvas.drawRect(
@@ -263,6 +340,14 @@ class CampusPainter extends CustomPainter {
     }
   }
 
+  /// What reads on [color]: black or white.
+  static Color inkOn(Color color) => color.computeLuminance() > 0.5
+      ? const Color(0xff000000)
+      : const Color(0xffffffff);
+
+  static Color _shade(Color color, double by) =>
+      Color.lerp(color, const Color(0xff000000), by)!;
+
   Paint _stroke(Color color) => Paint()
     ..color = color
     ..style = PaintingStyle.stroke
@@ -275,12 +360,16 @@ class CampusPainter extends CustomPainter {
     required double size,
     Color? color,
     bool bold = false,
+    String? family,
+    String? package,
   }) {
     final painter = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
           color: color ?? colors.waiting,
+          fontFamily: family,
+          package: package,
           fontSize: size,
           fontWeight: bold ? FontWeight.w600 : null,
           height: 1,
@@ -298,6 +387,7 @@ class CampusPainter extends CustomPainter {
   bool shouldRepaint(CampusPainter old) =>
       old.geometry != geometry ||
       old.scale != scale ||
+      old.pixelRatio != pixelRatio ||
       old.colors != colors ||
       old.sprites != sprites;
 }

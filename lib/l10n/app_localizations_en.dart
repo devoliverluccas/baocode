@@ -13698,4 +13698,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String officeReception(int working, int waiting, int done) {
     return '$working working · $waiting waiting for you · $done done';
   }
+
+  @override
+  String get officeNoAgents => 'No active agents — activate a conversation';
+
+  @override
+  String get officeAssign => 'assign';
+
+  @override
+  String get officeAssignTooltip => 'Put these projects in a company';
 }

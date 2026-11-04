@@ -8696,5 +8696,8 @@
       "waiting": {"type": "int"},
       "done": {"type": "int"}
     }
-  }
+  },
+  "officeNoAgents": "No active agents — activate a conversation",
+  "officeAssign": "assign",
+  "officeAssignTooltip": "Put these projects in a company"
 }

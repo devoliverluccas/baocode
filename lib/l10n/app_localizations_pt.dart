@@ -13794,4 +13794,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String officeReception(int working, int waiting, int done) {
     return '$working trabalhando · $waiting esperando você · $done prontas';
   }
+
+  @override
+  String get officeNoAgents => 'Nenhum agente ativo — ative uma conversa';
+
+  @override
+  String get officeAssign => 'atribuir';
+
+  @override
+  String get officeAssignTooltip => 'Colocar estes projetos numa empresa';
 }
