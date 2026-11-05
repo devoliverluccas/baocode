@@ -79,6 +79,8 @@ class BoardPageState extends State<BoardPage> {
         widget.workspace.setArchivedAll(_agents(threads), archived),
     pin: (threads, pinned) =>
         widget.workspace.setPinnedAll(_agents(threads), pinned),
+    create: (project) =>
+        widget.onOpenAgent(widget.workspace.create(project: project)),
   );
 
   static List<AgentThread> _agents(List<BoardThread> threads) => [

@@ -3760,5 +3760,10 @@
   "boardColumnDone": "Prontas",
   "boardColumnActive": "Ativas",
   "boardColumnIdle": "Paradas",
-  "boardColumnArchived": "Arquivadas"
+  "boardColumnArchived": "Arquivadas",
+  "boardCardsNewChat": "Novo chat",
+  "boardCardsShowAll": "Ver todas as {count}",
+  "boardCardsShowLess": "Mostrar menos",
+  "boardCardsChats": "{count, plural, =1{1 conversa} other{{count} conversas}}",
+  "boardCardsActiveDiff": "Nas conversas ativas"
 }

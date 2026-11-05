@@ -8770,5 +8770,12 @@
   "boardColumnDone": "Done",
   "boardColumnActive": "Active",
   "boardColumnIdle": "Idle",
-  "boardColumnArchived": "Archived"
+  "boardColumnArchived": "Archived",
+  "boardCardsNewChat": "New chat",
+  "boardCardsShowAll": "Show all {count}",
+  "@boardCardsShowAll": {"placeholders": {"count": {"type": "int"}}},
+  "boardCardsShowLess": "Show less",
+  "boardCardsChats": "{count, plural, =1{1 chat} other{{count} chats}}",
+  "@boardCardsChats": {"placeholders": {"count": {"type": "int"}}},
+  "boardCardsActiveDiff": "In active chats"
 }

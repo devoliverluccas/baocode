@@ -3714,5 +3714,10 @@
   "boardColumnDone": "完成",
   "boardColumnActive": "活跃",
   "boardColumnIdle": "空闲",
-  "boardColumnArchived": "已归档"
+  "boardColumnArchived": "已归档",
+  "boardCardsNewChat": "新聊天",
+  "boardCardsShowAll": "显示全部 {count} 个",
+  "boardCardsShowLess": "收起",
+  "boardCardsChats": "{count, plural, other{{count} 个聊天}}",
+  "boardCardsActiveDiff": "活跃聊天中"
 }

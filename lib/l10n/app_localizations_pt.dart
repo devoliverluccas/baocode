@@ -13923,4 +13923,29 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get boardColumnArchived => 'Arquivadas';
+
+  @override
+  String get boardCardsNewChat => 'Novo chat';
+
+  @override
+  String boardCardsShowAll(int count) {
+    return 'Ver todas as $count';
+  }
+
+  @override
+  String get boardCardsShowLess => 'Mostrar menos';
+
+  @override
+  String boardCardsChats(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count conversas',
+      one: '1 conversa',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get boardCardsActiveDiff => 'Nas conversas ativas';
 }
