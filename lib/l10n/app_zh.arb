@@ -3714,5 +3714,16 @@
   "boardColumnDone": "完成",
   "boardColumnActive": "活跃",
   "boardColumnIdle": "空闲",
-  "boardColumnArchived": "已归档"
+  "boardColumnArchived": "已归档",
+  "boardTableStatus": "状态",
+  "boardTableTitle": "对话",
+  "boardTableProject": "项目",
+  "boardTableCompany": "公司",
+  "boardTableKernel": "智能体",
+  "boardTableChanges": "改动",
+  "boardTableUpdated": "活动",
+  "boardTablePinned": "已置顶",
+  "boardTableSelected": "已选 {count} 个",
+  "boardTableClearSelection": "清除选择",
+  "boardTableSelectAll": "全选"
 }

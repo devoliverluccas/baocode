@@ -3760,5 +3760,16 @@
   "boardColumnDone": "Prontas",
   "boardColumnActive": "Ativas",
   "boardColumnIdle": "Paradas",
-  "boardColumnArchived": "Arquivadas"
+  "boardColumnArchived": "Arquivadas",
+  "boardTableStatus": "Status",
+  "boardTableTitle": "Conversa",
+  "boardTableProject": "Projeto",
+  "boardTableCompany": "Empresa",
+  "boardTableKernel": "Agente",
+  "boardTableChanges": "Alterações",
+  "boardTableUpdated": "Atividade",
+  "boardTablePinned": "Fixada",
+  "boardTableSelected": "{count, plural, =1{1 selecionada} other{{count} selecionadas}}",
+  "boardTableClearSelection": "Limpar seleção",
+  "boardTableSelectAll": "Selecionar todas"
 }

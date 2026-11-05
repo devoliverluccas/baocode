@@ -13076,4 +13076,39 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get boardColumnArchived => '已归档';
+
+  @override
+  String get boardTableStatus => '状态';
+
+  @override
+  String get boardTableTitle => '对话';
+
+  @override
+  String get boardTableProject => '项目';
+
+  @override
+  String get boardTableCompany => '公司';
+
+  @override
+  String get boardTableKernel => '智能体';
+
+  @override
+  String get boardTableChanges => '改动';
+
+  @override
+  String get boardTableUpdated => '活动';
+
+  @override
+  String get boardTablePinned => '已置顶';
+
+  @override
+  String boardTableSelected(int count) {
+    return '已选 $count 个';
+  }
+
+  @override
+  String get boardTableClearSelection => '清除选择';
+
+  @override
+  String get boardTableSelectAll => '全选';
 }

@@ -22520,6 +22520,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Archived'**
   String get boardColumnArchived;
+
+  /// No description provided for @boardTableStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get boardTableStatus;
+
+  /// No description provided for @boardTableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversation'**
+  String get boardTableTitle;
+
+  /// No description provided for @boardTableProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Project'**
+  String get boardTableProject;
+
+  /// No description provided for @boardTableCompany.
+  ///
+  /// In en, this message translates to:
+  /// **'Company'**
+  String get boardTableCompany;
+
+  /// No description provided for @boardTableKernel.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent'**
+  String get boardTableKernel;
+
+  /// No description provided for @boardTableChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes'**
+  String get boardTableChanges;
+
+  /// No description provided for @boardTableUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get boardTableUpdated;
+
+  /// No description provided for @boardTablePinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get boardTablePinned;
+
+  /// No description provided for @boardTableSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 selected} other{{count} selected}}'**
+  String boardTableSelected(int count);
+
+  /// No description provided for @boardTableClearSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear selection'**
+  String get boardTableClearSelection;
+
+  /// No description provided for @boardTableSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get boardTableSelectAll;
 }
 
 class _AppLocalizationsDelegate
