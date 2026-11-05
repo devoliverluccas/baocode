@@ -3725,5 +3725,16 @@
   "boardCardsShowAll": "显示全部 {count} 个",
   "boardCardsShowLess": "收起",
   "boardCardsChats": "{count, plural, other{{count} 个聊天}}",
-  "boardCardsActiveDiff": "活跃聊天中"
+  "boardCardsActiveDiff": "活跃聊天中",
+  "boardTableStatus": "状态",
+  "boardTableTitle": "对话",
+  "boardTableProject": "项目",
+  "boardTableCompany": "公司",
+  "boardTableKernel": "智能体",
+  "boardTableChanges": "改动",
+  "boardTableUpdated": "活动",
+  "boardTablePinned": "已置顶",
+  "boardTableSelected": "已选 {count} 个",
+  "boardTableClearSelection": "清除选择",
+  "boardTableSelectAll": "全选"
 }

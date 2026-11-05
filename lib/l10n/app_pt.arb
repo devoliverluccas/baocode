@@ -3771,5 +3771,16 @@
   "boardCardsShowAll": "Ver todas as {count}",
   "boardCardsShowLess": "Mostrar menos",
   "boardCardsChats": "{count, plural, =1{1 conversa} other{{count} conversas}}",
-  "boardCardsActiveDiff": "Nas conversas ativas"
+  "boardCardsActiveDiff": "Nas conversas ativas",
+  "boardTableStatus": "Status",
+  "boardTableTitle": "Conversa",
+  "boardTableProject": "Projeto",
+  "boardTableCompany": "Empresa",
+  "boardTableKernel": "Agente",
+  "boardTableChanges": "Alterações",
+  "boardTableUpdated": "Atividade",
+  "boardTablePinned": "Fixada",
+  "boardTableSelected": "{count, plural, =1{1 selecionada} other{{count} selecionadas}}",
+  "boardTableClearSelection": "Limpar seleção",
+  "boardTableSelectAll": "Selecionar todas"
 }

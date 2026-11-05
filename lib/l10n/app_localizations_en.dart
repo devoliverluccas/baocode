@@ -13872,4 +13872,45 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get boardCardsActiveDiff => 'In active chats';
+
+  @override
+  String get boardTableStatus => 'Status';
+
+  @override
+  String get boardTableTitle => 'Conversation';
+
+  @override
+  String get boardTableProject => 'Project';
+
+  @override
+  String get boardTableCompany => 'Company';
+
+  @override
+  String get boardTableKernel => 'Agent';
+
+  @override
+  String get boardTableChanges => 'Changes';
+
+  @override
+  String get boardTableUpdated => 'Activity';
+
+  @override
+  String get boardTablePinned => 'Pinned';
+
+  @override
+  String boardTableSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count selected',
+      one: '1 selected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get boardTableClearSelection => 'Clear selection';
+
+  @override
+  String get boardTableSelectAll => 'Select all';
 }
