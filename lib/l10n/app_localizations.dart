@@ -22556,6 +22556,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Can\'t drop here'**
   String get boardKanbanNotAllowed;
+
+  /// No description provided for @boardCardsNewChat.
+  ///
+  /// In en, this message translates to:
+  /// **'New chat'**
+  String get boardCardsNewChat;
+
+  /// No description provided for @boardCardsShowAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all {count}'**
+  String boardCardsShowAll(int count);
+
+  /// No description provided for @boardCardsShowLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get boardCardsShowLess;
+
+  /// No description provided for @boardCardsChats.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 chat} other{{count} chats}}'**
+  String boardCardsChats(int count);
+
+  /// No description provided for @boardCardsActiveDiff.
+  ///
+  /// In en, this message translates to:
+  /// **'In active chats'**
+  String get boardCardsActiveDiff;
 }
 
 class _AppLocalizationsDelegate

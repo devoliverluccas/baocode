@@ -13847,4 +13847,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get boardKanbanNotAllowed => 'Can\'t drop here';
+
+  @override
+  String get boardCardsNewChat => 'New chat';
+
+  @override
+  String boardCardsShowAll(int count) {
+    return 'Show all $count';
+  }
+
+  @override
+  String get boardCardsShowLess => 'Show less';
+
+  @override
+  String boardCardsChats(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count chats',
+      one: '1 chat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get boardCardsActiveDiff => 'In active chats';
 }

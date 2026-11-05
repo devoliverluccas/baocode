@@ -13096,4 +13096,28 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get boardKanbanNotAllowed => '不能放在这里';
+
+  @override
+  String get boardCardsNewChat => '新聊天';
+
+  @override
+  String boardCardsShowAll(int count) {
+    return '显示全部 $count 个';
+  }
+
+  @override
+  String get boardCardsShowLess => '收起';
+
+  @override
+  String boardCardsChats(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个聊天',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get boardCardsActiveDiff => '活跃聊天中';
 }

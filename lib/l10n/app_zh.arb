@@ -3720,5 +3720,10 @@
   "boardKanbanFold": "折叠",
   "boardKanbanEmpty": "这里没有内容",
   "boardKanbanDropHere": "将卡片拖到这里",
-  "boardKanbanNotAllowed": "不能放在这里"
+  "boardKanbanNotAllowed": "不能放在这里",
+  "boardCardsNewChat": "新聊天",
+  "boardCardsShowAll": "显示全部 {count} 个",
+  "boardCardsShowLess": "收起",
+  "boardCardsChats": "{count, plural, other{{count} 个聊天}}",
+  "boardCardsActiveDiff": "活跃聊天中"
 }

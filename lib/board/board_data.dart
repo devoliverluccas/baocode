@@ -110,6 +110,7 @@ class BoardActions {
     required this.setActive,
     required this.archive,
     required this.pin,
+    this.create,
   });
 
   /// Shows its chat, as a click on its sidebar row does.
@@ -117,6 +118,9 @@ class BoardActions {
   final void Function(List<BoardThread> threads, bool active) setActive;
   final void Function(List<BoardThread> threads, bool archived) archive;
   final void Function(List<BoardThread> threads, bool pinned) pin;
+
+  /// A new chat in a project, as the sidebar's `+`; null: none offered.
+  final void Function(Project project)? create;
 
   /// [threads] dropped on [column]: made what it is. Nothing for a column
   /// not [BoardColumn.droppable].

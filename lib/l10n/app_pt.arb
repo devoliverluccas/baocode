@@ -3766,5 +3766,10 @@
   "boardKanbanFold": "Recolher",
   "boardKanbanEmpty": "Nada aqui",
   "boardKanbanDropHere": "Solte um cartão aqui",
-  "boardKanbanNotAllowed": "Não dá para soltar aqui"
+  "boardKanbanNotAllowed": "Não dá para soltar aqui",
+  "boardCardsNewChat": "Novo chat",
+  "boardCardsShowAll": "Ver todas as {count}",
+  "boardCardsShowLess": "Mostrar menos",
+  "boardCardsChats": "{count, plural, =1{1 conversa} other{{count} conversas}}",
+  "boardCardsActiveDiff": "Nas conversas ativas"
 }
