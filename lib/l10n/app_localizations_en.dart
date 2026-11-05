@@ -13785,4 +13785,46 @@ class AppLocalizationsEn extends AppLocalizations {
   String officeDelegating(String what) {
     return 'delegating: $what';
   }
+
+  @override
+  String get boardTitle => 'Board';
+
+  @override
+  String get boardClose => 'Close the board';
+
+  @override
+  String get boardViewKanban => 'Board';
+
+  @override
+  String get boardViewCards => 'Cards';
+
+  @override
+  String get boardViewTable => 'Table';
+
+  @override
+  String get boardSearch => 'Search chats';
+
+  @override
+  String get boardAllCompanies => 'All';
+
+  @override
+  String get boardEmpty => 'No chats to show';
+
+  @override
+  String get boardColumnWorking => 'Working';
+
+  @override
+  String get boardColumnNeedsYou => 'Needs you';
+
+  @override
+  String get boardColumnDone => 'Done';
+
+  @override
+  String get boardColumnActive => 'Active';
+
+  @override
+  String get boardColumnIdle => 'Idle';
+
+  @override
+  String get boardColumnArchived => 'Archived';
 }

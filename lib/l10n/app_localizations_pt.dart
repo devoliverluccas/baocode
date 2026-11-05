@@ -13881,4 +13881,46 @@ class AppLocalizationsPt extends AppLocalizations {
   String officeDelegating(String what) {
     return 'delegando: $what';
   }
+
+  @override
+  String get boardTitle => 'Quadro';
+
+  @override
+  String get boardClose => 'Fechar o quadro';
+
+  @override
+  String get boardViewKanban => 'Quadro';
+
+  @override
+  String get boardViewCards => 'Cartões';
+
+  @override
+  String get boardViewTable => 'Tabela';
+
+  @override
+  String get boardSearch => 'Buscar conversas';
+
+  @override
+  String get boardAllCompanies => 'Todas';
+
+  @override
+  String get boardEmpty => 'Nenhuma conversa para mostrar';
+
+  @override
+  String get boardColumnWorking => 'Trabalhando';
+
+  @override
+  String get boardColumnNeedsYou => 'Precisa de você';
+
+  @override
+  String get boardColumnDone => 'Prontas';
+
+  @override
+  String get boardColumnActive => 'Ativas';
+
+  @override
+  String get boardColumnIdle => 'Paradas';
+
+  @override
+  String get boardColumnArchived => 'Arquivadas';
 }

@@ -8756,5 +8756,19 @@
     "placeholders": {
       "what": {"type": "String"}
     }
-  }
+  },
+  "boardTitle": "Board",
+  "boardClose": "Close the board",
+  "boardViewKanban": "Board",
+  "boardViewCards": "Cards",
+  "boardViewTable": "Table",
+  "boardSearch": "Search chats",
+  "boardAllCompanies": "All",
+  "boardEmpty": "No chats to show",
+  "boardColumnWorking": "Working",
+  "boardColumnNeedsYou": "Needs you",
+  "boardColumnDone": "Done",
+  "boardColumnActive": "Active",
+  "boardColumnIdle": "Idle",
+  "boardColumnArchived": "Archived"
 }

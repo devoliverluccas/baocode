@@ -13034,4 +13034,46 @@ class AppLocalizationsZh extends AppLocalizations {
   String officeDelegating(String what) {
     return '委派：$what';
   }
+
+  @override
+  String get boardTitle => '看板';
+
+  @override
+  String get boardClose => '关闭看板';
+
+  @override
+  String get boardViewKanban => '看板';
+
+  @override
+  String get boardViewCards => '卡片';
+
+  @override
+  String get boardViewTable => '表格';
+
+  @override
+  String get boardSearch => '搜索对话';
+
+  @override
+  String get boardAllCompanies => '全部';
+
+  @override
+  String get boardEmpty => '没有可显示的对话';
+
+  @override
+  String get boardColumnWorking => '工作中';
+
+  @override
+  String get boardColumnNeedsYou => '等你';
+
+  @override
+  String get boardColumnDone => '完成';
+
+  @override
+  String get boardColumnActive => '活跃';
+
+  @override
+  String get boardColumnIdle => '空闲';
+
+  @override
+  String get boardColumnArchived => '已归档';
 }

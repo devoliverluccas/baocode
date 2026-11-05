@@ -3700,5 +3700,19 @@
   "officeThinking": "思考中…",
   "officeUsing": "使用 {name}",
   "officeWorkflow": "工作流 {name}",
-  "officeDelegating": "委派：{what}"
+  "officeDelegating": "委派：{what}",
+  "boardTitle": "看板",
+  "boardClose": "关闭看板",
+  "boardViewKanban": "看板",
+  "boardViewCards": "卡片",
+  "boardViewTable": "表格",
+  "boardSearch": "搜索对话",
+  "boardAllCompanies": "全部",
+  "boardEmpty": "没有可显示的对话",
+  "boardColumnWorking": "工作中",
+  "boardColumnNeedsYou": "等你",
+  "boardColumnDone": "完成",
+  "boardColumnActive": "活跃",
+  "boardColumnIdle": "空闲",
+  "boardColumnArchived": "已归档"
 }

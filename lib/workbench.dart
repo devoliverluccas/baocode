@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'base/mouse_navigation.dart';
+import 'board/board_page.dart';
 import 'browser/browser_bridge.dart';
 import 'browser/browser_tools.dart';
 import 'browser/browser_welcome.dart';
@@ -1329,15 +1330,15 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     if (kind != null) _customizeKey.currentState?.show(kind);
     setState(() {
       _customizing = true;
-      _stashing = _office = false;
+      _stashing = _office = _board = false;
       if (kind != null) _customizeKind = kind;
     });
   }
 
   /// The conversations show again, in place of Customize or the stashes.
   void _closeCustomize() {
-    if (_customizing || _stashing || _office) {
-      setState(() => _customizing = _stashing = _office = false);
+    if (_replacingChat) {
+      setState(() => _customizing = _stashing = _office = _board = false);
     }
   }
 
@@ -1352,7 +1353,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   final GlobalKey<StashViewState> _stashKey = GlobalKey();
 
   /// Something shows in place of the conversations.
-  bool get _replacingChat => _customizing || _stashing || _office;
+  bool get _replacingChat => _customizing || _stashing || _office || _board;
 
   /// Shows the stashes, [id]'s if given.
   void _showStash([int? id]) {
@@ -1361,7 +1362,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     if (id != null) _stashKey.currentState?.show(id);
     setState(() {
       _stashing = true;
-      _customizing = _office = false;
+      _customizing = _office = _board = false;
       _stashShown = id;
     });
   }
@@ -1373,7 +1374,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   bool get _office => _officeShown;
   set _office(bool shown) {
     _officeShown = shown;
-    _workspace.chatCovered = shown;
+    _workspace.chatCovered = shown || _boardShown;
   }
 
   bool _officeShown = false;
@@ -1389,7 +1390,27 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     setState(() {
       _officeRoom = room;
       _office = true;
-      _customizing = _stashing = false;
+      _customizing = _stashing = _board = false;
+    });
+  }
+
+  // --- The board --------------------------------------------------------------
+
+  /// The board (lib/board) shows in place of the chat: the conversations
+  /// as a kanban, cards or a table.
+  bool get _board => _boardShown;
+  set _board(bool shown) {
+    _boardShown = shown;
+    _workspace.chatCovered = shown || _officeShown;
+  }
+
+  bool _boardShown = false;
+
+  void _showBoard() {
+    _closeDrawer();
+    setState(() {
+      _board = true;
+      _customizing = _stashing = _office = false;
     });
   }
 
@@ -3264,6 +3285,10 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           ? null
           : () => _office ? _closeCustomize() : _showOffice(),
       office: _office,
+      onBoard: agent != null
+          ? null
+          : () => _board ? _closeCustomize() : _showBoard(),
+      board: _board,
       // Opened on the Stash page, which an agent's window has not.
       stashes: switch (StashController.current) {
         final stash? when agent == null => sidebarStashes(stash, _showStash),
@@ -4366,6 +4391,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
 
   Widget _buildGrid({required bool showToggle}) {
     if (_office) return _footless(_buildOffice(showToggle: showToggle));
+    if (_board) return _footless(_buildBoard(showToggle: showToggle));
     if (_stashing) {
       if (StashController.current case final stash?) {
         return _footless(_buildStash(stash, showToggle: showToggle));
@@ -4460,6 +4486,28 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       room: _officeRoom,
       onClose: _closeCustomize,
       onOpenAgent: _openAgent,
+      island: AppColors.conversationSurface,
+      leading: !header && showToggle
+          ? SidebarIconButton(
+              icon: Codicons.layoutSidebarLeftOff,
+              tooltip: context.l10n.windowShowSidebar,
+              command: 'workbench.action.toggleSidebarVisibility',
+              onTap: _toggle,
+            )
+          : null,
+      titleBarInset: !header && showToggle
+          ? AppMetrics.trafficLightsWidth + 8
+          : 12.0,
+    );
+  }
+
+  /// The board, in place of the conversations, as the office is.
+  Widget _buildBoard({required bool showToggle}) {
+    final header = WindowControls.drawsHeader;
+    return BoardPage(
+      workspace: _workspace,
+      onOpenAgent: _openAgent,
+      onClose: _closeCustomize,
       island: AppColors.conversationSurface,
       leading: !header && showToggle
           ? SidebarIconButton(

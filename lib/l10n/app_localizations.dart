@@ -22436,6 +22436,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'delegating: {what}'**
   String officeDelegating(String what);
+
+  /// No description provided for @boardTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Board'**
+  String get boardTitle;
+
+  /// No description provided for @boardClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close the board'**
+  String get boardClose;
+
+  /// No description provided for @boardViewKanban.
+  ///
+  /// In en, this message translates to:
+  /// **'Board'**
+  String get boardViewKanban;
+
+  /// No description provided for @boardViewCards.
+  ///
+  /// In en, this message translates to:
+  /// **'Cards'**
+  String get boardViewCards;
+
+  /// No description provided for @boardViewTable.
+  ///
+  /// In en, this message translates to:
+  /// **'Table'**
+  String get boardViewTable;
+
+  /// No description provided for @boardSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search chats'**
+  String get boardSearch;
+
+  /// No description provided for @boardAllCompanies.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get boardAllCompanies;
+
+  /// No description provided for @boardEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No chats to show'**
+  String get boardEmpty;
+
+  /// No description provided for @boardColumnWorking.
+  ///
+  /// In en, this message translates to:
+  /// **'Working'**
+  String get boardColumnWorking;
+
+  /// No description provided for @boardColumnNeedsYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs you'**
+  String get boardColumnNeedsYou;
+
+  /// No description provided for @boardColumnDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get boardColumnDone;
+
+  /// No description provided for @boardColumnActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get boardColumnActive;
+
+  /// No description provided for @boardColumnIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get boardColumnIdle;
+
+  /// No description provided for @boardColumnArchived.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived'**
+  String get boardColumnArchived;
 }
 
 class _AppLocalizationsDelegate

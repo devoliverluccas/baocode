@@ -2604,6 +2604,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
     }
     _paneTabs = kept['paneTabs'] == true;
     _miniOffice = kept['miniOffice'] == true;
+    if (kept['boardView'] case final String view) _boardView = view;
     if (kept['layout'] == WorkspaceLayout.ide.name) {
       _layout = WorkspaceLayout.ide;
     }
@@ -2765,6 +2766,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       'layout': _layout.name,
       if (_paneTabs) 'paneTabs': true,
       if (_miniOffice) 'miniOffice': true,
+      'boardView': ?_boardView,
       'settings': _settings,
       'agents': _agentSettings,
       'addedDirs': _addedDirs,
@@ -3338,6 +3340,17 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   set miniOffice(bool shown) {
     if (shown == _miniOffice) return;
     _miniOffice = shown;
+    _save();
+    notifyListeners();
+  }
+
+  /// The board's (lib/board) view last picked, by its name; null: the
+  /// first.
+  String? get boardView => _boardView;
+  String? _boardView;
+  set boardView(String? view) {
+    if (view == _boardView) return;
+    _boardView = view;
     _save();
     notifyListeners();
   }

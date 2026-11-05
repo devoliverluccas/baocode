@@ -3746,5 +3746,19 @@
   "officeThinking": "pensando…",
   "officeUsing": "usando {name}",
   "officeWorkflow": "workflow {name}",
-  "officeDelegating": "delegando: {what}"
+  "officeDelegating": "delegando: {what}",
+  "boardTitle": "Quadro",
+  "boardClose": "Fechar o quadro",
+  "boardViewKanban": "Quadro",
+  "boardViewCards": "Cartões",
+  "boardViewTable": "Tabela",
+  "boardSearch": "Buscar conversas",
+  "boardAllCompanies": "Todas",
+  "boardEmpty": "Nenhuma conversa para mostrar",
+  "boardColumnWorking": "Trabalhando",
+  "boardColumnNeedsYou": "Precisa de você",
+  "boardColumnDone": "Prontas",
+  "boardColumnActive": "Ativas",
+  "boardColumnIdle": "Paradas",
+  "boardColumnArchived": "Arquivadas"
 }

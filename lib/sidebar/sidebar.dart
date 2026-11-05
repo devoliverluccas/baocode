@@ -226,6 +226,8 @@ class Sidebar extends StatefulWidget {
     this.stashes,
     this.onOffice,
     this.office = false,
+    this.onBoard,
+    this.board = false,
     this.drag,
     this.link,
     this.current,
@@ -321,6 +323,13 @@ class Sidebar extends StatefulWidget {
 
   /// It shows: the Office row is selected.
   final bool office;
+
+  /// Shows the board in place of the chat (lib/board); no Board row
+  /// without it.
+  final VoidCallback? onBoard;
+
+  /// It shows: the Board row is selected.
+  final bool board;
 
   /// An agent was opened or created from here (the drawer closes).
   final VoidCallback? onOpened;
@@ -484,13 +493,18 @@ class _SidebarState extends State<Sidebar>
     // Customize or the Stash shown: its row is the one picked, not the
     // conversation picked before it.
     if (_onPage &&
-        !(oldWidget.customizing || oldWidget.stashing || oldWidget.office)) {
+        !(oldWidget.customizing ||
+            oldWidget.stashing ||
+            oldWidget.office ||
+            oldWidget.board)) {
       _listSelection.select(null);
     }
   }
 
-  /// Customize, the Stash or the office is shown in place of the chat.
-  bool get _onPage => widget.customizing || widget.stashing || widget.office;
+  /// Customize, the Stash, the office or the board is shown in place of
+  /// the chat.
+  bool get _onPage =>
+      widget.customizing || widget.stashing || widget.office || widget.board;
 
   @override
   void dispose() {
@@ -1266,10 +1280,18 @@ class _SidebarState extends State<Sidebar>
               selected: widget.office,
               onTap: office,
             ),
+          if (widget.onBoard case final board?)
+            _NavRow(
+              icon: Codicons.project,
+              label: context.l10n.boardTitle,
+              selected: widget.board,
+              onTap: board,
+            ),
           if (widget.onSearch != null ||
               widget.onCustomize != null ||
               widget.onStash != null ||
-              widget.onOffice != null)
+              widget.onOffice != null ||
+              widget.onBoard != null)
             const SizedBox(height: 4),
           _buildGroupingBar(),
           Expanded(child: _buildList()),
@@ -2025,11 +2047,12 @@ class _SidebarState extends State<Sidebar>
       // which has its one conversation.
       dragNew: switch ((project, widget.drag)) {
         (final project?, final drag?)
-            when widget.onNewAgent == null && !group.archived => (
-          drag: drag,
-          make: () => _workspace.dragAgent(project),
-          onMissed: _workspace.dropDragAgent,
-        ),
+            when widget.onNewAgent == null && !group.archived =>
+          (
+            drag: drag,
+            make: () => _workspace.dragAgent(project),
+            onMissed: _workspace.dropDragAgent,
+          ),
         _ => null,
       },
       // The archived agents' as the footer's toggle has it: unarchive or
