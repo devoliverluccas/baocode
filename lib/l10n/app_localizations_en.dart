@@ -13793,7 +13793,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get boardClose => 'Close the board';
 
   @override
-  String get boardViewKanban => 'Board';
+  String get boardViewKanban => 'Kanban';
 
   @override
   String get boardViewCards => 'Cards';

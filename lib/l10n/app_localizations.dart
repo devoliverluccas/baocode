@@ -22452,7 +22452,7 @@ abstract class AppLocalizations {
   /// No description provided for @boardViewKanban.
   ///
   /// In en, this message translates to:
-  /// **'Board'**
+  /// **'Kanban'**
   String get boardViewKanban;
 
   /// No description provided for @boardViewCards.

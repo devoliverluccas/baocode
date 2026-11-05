@@ -3749,7 +3749,7 @@
   "officeDelegating": "delegando: {what}",
   "boardTitle": "Quadro",
   "boardClose": "Fechar o quadro",
-  "boardViewKanban": "Quadro",
+  "boardViewKanban": "Kanban",
   "boardViewCards": "Cartões",
   "boardViewTable": "Tabela",
   "boardSearch": "Buscar conversas",

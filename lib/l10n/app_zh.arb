@@ -3703,7 +3703,7 @@
   "officeDelegating": "委派：{what}",
   "boardTitle": "看板",
   "boardClose": "关闭看板",
-  "boardViewKanban": "看板",
+  "boardViewKanban": "看板列",
   "boardViewCards": "卡片",
   "boardViewTable": "表格",
   "boardSearch": "搜索对话",

@@ -13042,7 +13042,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get boardClose => '关闭看板';
 
   @override
-  String get boardViewKanban => '看板';
+  String get boardViewKanban => '看板列';
 
   @override
   String get boardViewCards => '卡片';

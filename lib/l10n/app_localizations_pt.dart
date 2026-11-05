@@ -13889,7 +13889,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get boardClose => 'Fechar o quadro';
 
   @override
-  String get boardViewKanban => 'Quadro';
+  String get boardViewKanban => 'Kanban';
 
   @override
   String get boardViewCards => 'Cartões';
