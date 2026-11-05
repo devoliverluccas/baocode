@@ -3760,5 +3760,11 @@
   "boardColumnDone": "Prontas",
   "boardColumnActive": "Ativas",
   "boardColumnIdle": "Paradas",
-  "boardColumnArchived": "Arquivadas"
+  "boardColumnArchived": "Arquivadas",
+  "boardKanbanLanes": "Faixas por empresa",
+  "boardKanbanExpand": "Mostrar {column}",
+  "boardKanbanFold": "Recolher",
+  "boardKanbanEmpty": "Nada aqui",
+  "boardKanbanDropHere": "Solte um cartão aqui",
+  "boardKanbanNotAllowed": "Não dá para soltar aqui"
 }

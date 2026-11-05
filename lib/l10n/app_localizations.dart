@@ -22520,6 +22520,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Archived'**
   String get boardColumnArchived;
+
+  /// No description provided for @boardKanbanLanes.
+  ///
+  /// In en, this message translates to:
+  /// **'Lanes by company'**
+  String get boardKanbanLanes;
+
+  /// No description provided for @boardKanbanExpand.
+  ///
+  /// In en, this message translates to:
+  /// **'Show {column}'**
+  String boardKanbanExpand(String column);
+
+  /// No description provided for @boardKanbanFold.
+  ///
+  /// In en, this message translates to:
+  /// **'Fold'**
+  String get boardKanbanFold;
+
+  /// No description provided for @boardKanbanEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing here'**
+  String get boardKanbanEmpty;
+
+  /// No description provided for @boardKanbanDropHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop a card here'**
+  String get boardKanbanDropHere;
+
+  /// No description provided for @boardKanbanNotAllowed.
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t drop here'**
+  String get boardKanbanNotAllowed;
 }
 
 class _AppLocalizationsDelegate

@@ -13923,4 +13923,24 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get boardColumnArchived => 'Arquivadas';
+
+  @override
+  String get boardKanbanLanes => 'Faixas por empresa';
+
+  @override
+  String boardKanbanExpand(String column) {
+    return 'Mostrar $column';
+  }
+
+  @override
+  String get boardKanbanFold => 'Recolher';
+
+  @override
+  String get boardKanbanEmpty => 'Nada aqui';
+
+  @override
+  String get boardKanbanDropHere => 'Solte um cartão aqui';
+
+  @override
+  String get boardKanbanNotAllowed => 'Não dá para soltar aqui';
 }

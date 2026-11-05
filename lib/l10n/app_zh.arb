@@ -3714,5 +3714,11 @@
   "boardColumnDone": "完成",
   "boardColumnActive": "活跃",
   "boardColumnIdle": "空闲",
-  "boardColumnArchived": "已归档"
+  "boardColumnArchived": "已归档",
+  "boardKanbanLanes": "按公司分道",
+  "boardKanbanExpand": "显示{column}",
+  "boardKanbanFold": "折叠",
+  "boardKanbanEmpty": "这里没有内容",
+  "boardKanbanDropHere": "将卡片拖到这里",
+  "boardKanbanNotAllowed": "不能放在这里"
 }

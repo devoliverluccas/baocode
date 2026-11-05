@@ -8770,5 +8770,16 @@
   "boardColumnDone": "Done",
   "boardColumnActive": "Active",
   "boardColumnIdle": "Idle",
-  "boardColumnArchived": "Archived"
+  "boardColumnArchived": "Archived",
+  "boardKanbanLanes": "Lanes by company",
+  "boardKanbanExpand": "Show {column}",
+  "@boardKanbanExpand": {
+    "placeholders": {
+      "column": {"type": "String"}
+    }
+  },
+  "boardKanbanFold": "Fold",
+  "boardKanbanEmpty": "Nothing here",
+  "boardKanbanDropHere": "Drop a card here",
+  "boardKanbanNotAllowed": "Can't drop here"
 }

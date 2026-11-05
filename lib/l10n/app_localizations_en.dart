@@ -13827,4 +13827,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get boardColumnArchived => 'Archived';
+
+  @override
+  String get boardKanbanLanes => 'Lanes by company';
+
+  @override
+  String boardKanbanExpand(String column) {
+    return 'Show $column';
+  }
+
+  @override
+  String get boardKanbanFold => 'Fold';
+
+  @override
+  String get boardKanbanEmpty => 'Nothing here';
+
+  @override
+  String get boardKanbanDropHere => 'Drop a card here';
+
+  @override
+  String get boardKanbanNotAllowed => 'Can\'t drop here';
 }

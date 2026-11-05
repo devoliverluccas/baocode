@@ -13076,4 +13076,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get boardColumnArchived => '已归档';
+
+  @override
+  String get boardKanbanLanes => '按公司分道';
+
+  @override
+  String boardKanbanExpand(String column) {
+    return '显示$column';
+  }
+
+  @override
+  String get boardKanbanFold => '折叠';
+
+  @override
+  String get boardKanbanEmpty => '这里没有内容';
+
+  @override
+  String get boardKanbanDropHere => '将卡片拖到这里';
+
+  @override
+  String get boardKanbanNotAllowed => '不能放在这里';
 }
